@@ -43,11 +43,11 @@ Open the local URL printed in the terminal. Alternatively, leave the key file un
 
 ## Camera controls
 
-| Preset | Path | Requested duration |
-| --- | --- | --- |
-| Full Orbit (default) | 0° → 360° azimuth, level elevation | 6 seconds |
-| Side Arc | 0° → 65° azimuth, 0° → 8° elevation | 5 seconds |
-| Hero Rise | 0° → 35° azimuth, 0° → 30° elevation | 5 seconds |
+| Preset               | Path                                 | Requested duration |
+| -------------------- | ------------------------------------ | ------------------ |
+| Full Orbit (default) | 0° → 360° azimuth, level elevation   | 6 seconds          |
+| Side Arc             | 0° → 65° azimuth, 0° → 8° elevation  | 5 seconds          |
+| Hero Rise            | 0° → 35° azimuth, 0° → 30° elevation | 5 seconds          |
 
 Full Orbit uses nine keyframes, reaching 360° at normalized time 0.833333. All presets use constant normalized camera distance, balanced prompt expansion, and no fixed seed. The **Recipe** panel shows the endpoint payload; edit `lib/recipe.ts` to adjust prompts and trajectories.
 
@@ -60,6 +60,7 @@ The Full Orbit prompt retains the playground wording that worked in our test, in
 - In local development, native FFmpeg assembles the source prefix, generated clip, and source tail. Temporary assembly files are removed afterward.
 - The generated clip sets the output dimensions. The original is resized to match without cropping or padding, which can slightly change its proportions.
 - A 0.2-second blend at the end of the generated clip returns to the original freeze frame before the source action resumes. No optical-flow alignment is applied.
+- Every export trims the last 0.5 seconds from the generated camera move, including its audio. The return blend moves earlier to fit inside the shortened clip; the original footage is kept in full. A 6-second generation therefore adds 5.5 seconds to the finished edit. This also applies when rebuilding an existing generation, and does not change generation billing. Very short clips retain at least one frame when available.
 - Output is H.264 MP4 at 30 fps. Audio from each segment is retained when available, with silence substituted where needed.
 - When native local export is unavailable, the app falls back to browser FFmpeg WebAssembly. The approximately 32 MB engine loads on demand; browser export can be slower and use substantial memory.
 

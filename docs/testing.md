@@ -30,7 +30,7 @@ Score entry and exit seams 1–5, where 5 is visually unobtrusive. Watch the ent
 - Key connection, refresh clears key, invalid key, empty balance, generation error.
 - Source/result toggle and repeated generation.
 - Local export with sound and without sound; each segment retains its audio when available.
-- Download MP4, check duration = full original duration + generated clip duration.
+- Download MP4, check duration = full original duration + generated clip duration − 0.5 seconds. Confirm both camera video and audio end early, with the return blend inside the shortened clip and all original footage retained.
 - Narrow mobile layout and keyboard navigation through presets, slider and dialogs.
 - Browser engine download and worker loading on the deployed URL.
 
