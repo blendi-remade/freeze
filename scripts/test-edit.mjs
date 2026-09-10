@@ -35,11 +35,11 @@ run([
   '-f',
   'lavfi',
   '-i',
-  'color=c=blue:size=176x90:rate=30:duration=4.5',
+  'color=c=blue:size=176x90:rate=30:duration=4',
   '-f',
   'lavfi',
   '-i',
-  'color=c=red:size=176x90:rate=30:duration=0.5',
+  'color=c=red:size=176x90:rate=30:duration=1',
   '-filter_complex',
   '[0:v][1:v]concat=n=2:v=1:a=0[v]',
   '-map',
@@ -138,12 +138,12 @@ for (const [name, time, sourceAudio, cameraAudio, cameraSeconds] of [
     `test-results/${name}.mp4`,
   );
   run(args);
-  const expectedDuration = cameraSeconds < 0.5 ? 2 + 1 / 30 : 6.5;
+  const expectedDuration = cameraSeconds < 0.5 ? 2 + 1 / 30 : 6;
   verifyOutput(`test-results/${name}.mp4`, expectedDuration, audio);
   if (cameraSeconds === 5) {
     const rgb = run([
       '-ss',
-      String(time + 4.1),
+      String(time + 3.8),
       '-i',
       `test-results/${name}.mp4`,
       '-frames:v',
@@ -165,7 +165,7 @@ for (const [name, time, sourceAudio, cameraAudio, cameraSeconds] of [
     `PASS ${name}: shortened video/audio, original timeline, dimensions, end trim`,
   );
 }
-assert.equal(getCameraEditDuration(6), 5.5);
+assert.equal(getCameraEditDuration(6), 5);
 assert.equal(getCameraEditDuration(0.01), 0.01);
 // Exercise the actual shipped WebAssembly codec and filters, independently of browser UI.
 globalThis.self = { location: { href: import.meta.url } };
@@ -221,7 +221,54 @@ assert.equal(core.ret, 0);
 const wasmOutput = core.FS.readFile('output.mp4');
 assert.ok(wasmOutput.length > 1000);
 writeFileSync('test-results/wasm-output.mp4', wasmOutput);
-verifyOutput('test-results/wasm-output.mp4', 6.5, true);
+verifyOutput('test-results/wasm-output.mp4', 6, true);
 console.log(
-  'PASS shipped WebAssembly core: 0.5s end trim, video/audio duration, H.264/AAC export',
+  'PASS shipped WebAssembly core: 1s end trim, video/audio duration, H.264/AAC export',
 );
+
+function frame(file, time) {
+  return run([
+    '-ss',
+    String(time),
+    '-i',
+    file,
+    '-frames:v',
+    '1',
+    '-pix_fmt',
+    'rgb24',
+    '-f',
+    'rawvideo',
+    'pipe:1',
+  ]);
+}
+for (const file of ['middle.mp4', 'wasm-output.mp4']) {
+  for (const [label, time] of [
+    ['entry', 1],
+    ['exit', 4.9666667],
+  ]) {
+    const actual = frame(`test-results/${file}`, time);
+    assert.equal(actual.length, 160 * 90 * 3);
+    for (let i = 0; i < actual.length; i += 3) {
+      assert.ok(
+        actual[i] < 30 && actual[i + 2] > 200,
+        `${file}: ${label} contains a transition blend instead of the AI frame`,
+      );
+    }
+    console.log(`PASS ${file} ${label}: direct cut with no transition blend`);
+  }
+  const anchor = frame('test-results/source.mp4', 1);
+  const resumed = frame(`test-results/${file}`, 5);
+  assert.equal(resumed.length, anchor.length);
+  const meanError =
+    resumed.reduce(
+      (sum, value, index) => sum + Math.abs(value - anchor[index]),
+      0,
+    ) / resumed.length;
+  assert.ok(
+    meanError < 8,
+    `${file}: original footage did not resume at the selected frame`,
+  );
+  console.log(
+    `PASS ${file}: original footage resumes intact after trimmed AI clip`,
+  );
+}

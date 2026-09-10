@@ -1,4 +1,4 @@
-export const CAMERA_END_TRIM_SECONDS = 0.5;
+export const CAMERA_END_TRIM_SECONDS = 1;
 
 export function getCameraEditDuration(cameraDuration: number) {
   return Math.min(
@@ -38,20 +38,7 @@ export function buildEditPlan(
     }
   }
   const remaining = sourceDuration - freezeAt;
-  if (remaining >= 1 / 30) {
-    // Blend the last six frames into the source's frozen pose before motion resumes.
-    // Keep the blend inside the shortened camera clip; the source is unchanged.
-    const blendDuration = Math.min(0.2, cameraEditDuration);
-    const blendStart = Math.max(0, cameraEditDuration - blendDuration);
-    const weight = `clip((T-${blendStart})/${Math.max(1 / 30, blendDuration - 1 / 30)},0,1)`;
-    graph.push(
-      `[1:v]${normalizeCamera}[cameraRaw]`,
-      `[0:v]trim=start=${freezeAt},setpts=PTS-STARTPTS,${normalize},trim=end_frame=1,tpad=stop_mode=clone:stop_duration=${cameraEditDuration},trim=duration=${cameraEditDuration}[returnFrame]`,
-      `[cameraRaw][returnFrame]blend=all_expr='A*(1-${weight})+B*${weight}':shortest=1[camera]`,
-    );
-  } else {
-    graph.push(`[1:v]${normalizeCamera}[camera]`);
-  }
+  graph.push(`[1:v]${normalizeCamera}[camera]`);
   segments.push('[camera]');
   if (hasAudio) {
     graph.push(
