@@ -3,8 +3,8 @@ export const ENDPOINT = 'minimax/h3-max/multi-angle/image-to-video';
 export const PRESETS = [
   {
     id: 'swing',
-    name: 'Swing Back',
-    description: 'A side arc. Then rewind.',
+    name: 'Side Arc',
+    description: 'A 65-degree arc around the frame.',
     angle: '65° / LATERAL',
   },
   {

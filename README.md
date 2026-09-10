@@ -2,12 +2,12 @@
 
 A video editor for frozen camera moves.
 
-Turn a moment in a real video into a bullet-time camera move, then resume the original action. Built with [MiniMax H3 Max Multi Angle on fal](https://fal.ai/models/minimax/h3-max/multi-angle/image-to-video).
+Turn a moment in a real video into a bullet-time camera move, append it to the original footage up to your selected frame. Built with [MiniMax H3 Max Multi Angle on fal](https://fal.ai/models/minimax/h3-max/multi-angle/image-to-video).
 
 ![Freeze art direction — illustrative still, not an endpoint result](public/images/freeze-cover.jpg)
 
 ```text
-Original video → extract one frame → H3 Max camera move → original video resumes
+Original footage up to selected frame → full H3 Max generated clip
 ```
 
 ## Try it locally
@@ -19,7 +19,7 @@ npm ci
 npm run dev
 ```
 
-Open the printed local URL. For local use, put `FAL_KEY=your_key` in `.dev.vars` (ignored by Git), or use **Connect fal** to enter a session-only key. Upload a short clip, scrub to the moment, choose a camera move, and generate. Once the move is ready, choose **Assemble finished edit** and download the MP4.
+Open the printed local URL. For local use, put `FAL_KEY=your_key` in `.dev.vars` (ignored by Git), or use **Connect fal** to enter a session-only key. Upload a short clip, scrub to the moment, choose a camera move, and generate. The app automatically assembles the combined video. Download the finished MP4 when it is ready.
 
 The local demo reads its key from `.dev.vars`. Local `.env*` and `.dev.vars*` secret files are ignored by Git. The optional manually entered key lives only in tab memory and is sent through the server relay; refreshing clears that optional key. Server credentials are never returned to the browser. The original video stays in the browser; only the selected JPEG frame is sent to fal. fal processes and stores generated media under its own policies.
 
@@ -27,11 +27,11 @@ The local demo reads its key from `.dev.vars`. Local `.env*` and `.dev.vars*` se
 
 | Move       | Generated camera path                | Edit treatment                     |
 | ---------- | ------------------------------------ | ---------------------------------- |
-| Swing Back | 0° → 65° azimuth, 0° → 8° elevation  | Outbound + reverse                 |
-| Hero Rise  | 0° → 35° azimuth, 0° → 30° elevation | Outbound + reverse                 |
+| Side Arc   | 0° → 65° azimuth, 0° → 8° elevation  | Full generated clip                |
+| Hero Rise  | 0° → 35° azimuth, 0° → 30° elevation | Full generated clip                |
 | Full Orbit | 0° → 360° azimuth                    | One continuous orbit; experimental |
 
-All presets keep normalized distance at 1. A five-second generation becomes a 3.2-second insert. The two return presets play the generated move forward and backward, returning to the same generated opening frame. This reduces return drift but does not guarantee a pixel-perfect match to the original frame.
+All presets keep normalized distance at 1. The output is the original video from the beginning up to the selected timestamp, followed by the full generated clip at normal speed. There is no reversed segment or return to the remainder of the source video. Assembly starts automatically when generation completes.
 
 The **recipe** panel exposes the actual endpoint payload. Edit `lib/recipe.ts` to design another move.
 
@@ -41,7 +41,7 @@ The **recipe** panel exposes the actual endpoint payload. Edit `lib/recipe.ts` t
 - Browser video decoding, thumbnail extraction, and frame capture.
 - Server relay submits a fixed five-second request and polls the fal queue. Safety checking stays enabled.
 - Single-thread FFmpeg WebAssembly assembles the complete edit locally. No video upload server or database.
-- H.264 MP4 export at 30 fps, source aspect ratio, maximum long edge 1280 px. Source audio resumes in sync after a silent freeze interval. Generated audio is omitted.
+- H.264 MP4 export at 30 fps, source aspect ratio, maximum long edge 1280 px. Source-prefix audio and generated audio are retained when present, with silence for a segment that has no audio.
 - The editing engine is downloaded only when exporting. Its approximately 32 MB WASM file is delivered in two pieces to respect static hosting file limits.
 
 ## Current boundaries

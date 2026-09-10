@@ -62,8 +62,7 @@ export default function Home() {
     [error, setError] = useState(''),
     [generated, setGenerated] = useState(''),
     [exported, setExported] = useState('');
-  const [freezeAt, setFreezeAt] = useState(0),
-    [renderPreset, setRenderPreset] = useState<PresetId>('swing');
+  const [freezeAt, setFreezeAt] = useState(0);
   const [view, setView] = useState<'source' | 'result'>('source'),
     [copied, setCopied] = useState(false);
   useEffect(
@@ -171,10 +170,8 @@ export default function Home() {
         if (state.video?.url) {
           setGenerated(state.video.url);
           setFreezeAt(frozenTime);
-          setRenderPreset(preset);
           setExported('');
-          setView('result');
-          setPhase('Camera move ready. Assemble the finished edit.');
+          await exportEdit(state.video.url, frozenTime);
           return;
         }
         setPhase(
@@ -193,17 +190,16 @@ export default function Home() {
       setBusy(false);
     }
   }
-  async function exportEdit() {
-    if (!file || !generated) return;
+  async function exportEdit(cameraUrl = generated, selectedTime = freezeAt) {
+    if (!file || !cameraUrl) return;
     setBusy(true);
     setError('');
     try {
       const { assembleEdit } = await import('@/lib/export');
       const output = await assembleEdit(
         file,
-        generated,
-        freezeAt,
-        renderPreset !== 'orbit',
+        cameraUrl,
+        selectedTime,
         setPhase,
       );
       URL.revokeObjectURL(resultUrl.current);
@@ -212,6 +208,7 @@ export default function Home() {
       setView('result');
       setPhase('Your finished edit is ready.');
     } catch (e) {
+      setView('result');
       setError(
         e instanceof Error
           ? e.message
@@ -510,12 +507,12 @@ export default function Home() {
                 ) : (
                   <Download size={18} />
                 )}
-                <span>{busy ? 'Assembling…' : 'Assemble edit'}</span>
+                <span>{busy ? 'Assembling…' : 'Retry assembly'}</span>
               </button>
             )}
             <span>
               {hasResult
-                ? 'Original + camera move + original'
+                ? 'Original up to frame + generated clip'
                 : 'Only the selected frame goes to fal'}
             </span>
             {generated && (
@@ -612,8 +609,8 @@ export default function Home() {
           <DialogTitle>Camera recipe</DialogTitle>
           <DialogDescription>
             The selected frame becomes the first frame of an H3 Max camera move.
-            Swing Back and Hero Rise reverse that move before the original video
-            resumes.
+            The result contains your original footage up to the selected frame,
+            followed by the full generated clip.
           </DialogDescription>
           <pre>
             {JSON.stringify(

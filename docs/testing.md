@@ -1,6 +1,6 @@
 # Real-footage evaluation
 
-Start with short SDR H.264 clips, a relatively stationary phone, and a sharp frame at the apex of the action. Use 768P and Swing Back for the first pass. The exporter currently produces 30fps MP4 with the original aspect ratio and a 1280px maximum long edge.
+Start with short SDR H.264 clips, a relatively stationary phone, and a sharp frame at the apex of the action. Use 768P and Side Arc for the first pass. The exporter currently produces 30fps MP4 with the original aspect ratio and a 1280px maximum long edge.
 
 ## First six clips
 
@@ -13,7 +13,7 @@ Start with short SDR H.264 clips, a relatively stationary phone, and a sharp fra
 | Basketball toss      | Ball shape, hands, background geometry            |
 | Hair flip            | Thin structures, subject motion leakage           |
 
-Generate once with Swing Back; retry only when necessary. Check the fal dashboard if a request times out. Then compare Hero Rise and Full Orbit on the three strongest clips. Record each attempt so the successful examples do not hide retry costs.
+Generate once with Side Arc; retry only when necessary. Check the fal dashboard if a request times out. Then compare Hero Rise and Full Orbit on the three strongest clips. Record each attempt so the successful examples do not hide retry costs.
 
 ## Record for every result
 
@@ -21,7 +21,7 @@ Generate once with Swing Back; retry only when necessary. Check the fal dashboar
 | ---------------- | ---- | ------- | ----------- | --------------- | ------------------- | ---------- | --------- | ---------- | ---- |
 |                  |      |         |             |                 |                     |            |           |            |      |
 
-Score entry and exit seams 1–5, where 5 is visually unobtrusive. Watch the entire finished edit, not just the generated camera move. The first-frame match can still drift even when the generated video is reversed exactly.
+Score entry and exit seams 1–5, where 5 is visually unobtrusive. Watch the entire finished edit, not just the generated camera move. Check the cut from the source frame into the generated clip.
 
 ## Browser flow checks
 
@@ -29,8 +29,8 @@ Score entry and exit seams 1–5, where 5 is visually unobtrusive. Watch the ent
 - Scrub, step, play/pause, replace source, portrait video, and landscape video.
 - Key connection, refresh clears key, invalid key, empty balance, generation error.
 - Source/result toggle and repeated generation.
-- Local export with sound and without sound; source audio resumes in sync.
-- Download MP4, check duration = source duration + approximately 3.2 seconds.
+- Local export with sound and without sound; each segment retains its audio when available.
+- Download MP4, check duration = selected timestamp + generated clip duration.
 - Narrow mobile layout and keyboard navigation through presets, slider and dialogs.
 - Browser engine download and worker loading on the deployed URL.
 

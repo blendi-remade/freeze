@@ -8,7 +8,6 @@ export async function assembleEdit(
   file: File,
   cameraUrl: string,
   freezeAt: number,
-  rewind: boolean,
   report: (message: string) => void,
 ): Promise<Blob> {
   const ff = new FFmpeg();
@@ -44,7 +43,6 @@ export async function assembleEdit(
         Math.round((metadata.videoWidth * ratio) / 2) * 2,
       ),
       height = Math.max(2, Math.round((metadata.videoHeight * ratio) / 2) * 2);
-    const total = metadata.duration;
     metadata.removeAttribute('src');
     metadata.load();
     report('Preparing the source and camera move');
@@ -80,13 +78,36 @@ export async function assembleEdit(
     const hasAudio = probe.streams.some(
       (s: { codec_type: string }) => s.codec_type === 'audio',
     );
+    await ff.ffprobe([
+      '-v',
+      'error',
+      '-show_streams',
+      '-show_format',
+      '-of',
+      'json',
+      'camera.mp4',
+      '-o',
+      'camera-probe.json',
+    ]);
+    const cameraProbe = JSON.parse(
+      new TextDecoder().decode(
+        (await ff.readFile('camera-probe.json')) as Uint8Array,
+      ),
+    );
+    const cameraAudio =
+      cameraProbe.streams?.some(
+        (s: { codec_type: string }) => s.codec_type === 'audio',
+      ) || false;
+    const cameraDuration = Number(cameraProbe.format?.duration);
+    if (!Number.isFinite(cameraDuration) || cameraDuration <= 0)
+      throw new Error('Could not read the generated clip duration.');
     const graph = buildEditPlan(
       width,
       height,
-      total,
       freezeAt,
-      rewind,
+      cameraDuration,
       hasAudio,
+      cameraAudio,
     );
     report('Assembling your MP4 locally. Keep this tab open.');
     ff.on('progress', ({ progress }) => {
@@ -103,7 +124,8 @@ export async function assembleEdit(
       '-map',
       '[v]',
     ];
-    if (hasAudio) args.push('-map', '[a]', '-c:a', 'aac', '-b:a', '192k');
+    if (hasAudio || cameraAudio)
+      args.push('-map', '[a]', '-c:a', 'aac', '-b:a', '192k');
     args.push(
       '-c:v',
       'libx264',

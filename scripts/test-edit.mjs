@@ -42,10 +42,10 @@ run([
   'yuv420p',
   'test-results/camera.mp4',
 ]);
-for (const [name, time, rewind, audio] of [
-  ['middle', 1, true, true],
-  ['start', 0, true, false],
-  ['end', 1.95, false, true],
+for (const [name, time, audio] of [
+  ['middle', 1, true],
+  ['start', 0, false],
+  ['end', 1.95, true],
 ]) {
   const args = [
     '-i',
@@ -53,7 +53,7 @@ for (const [name, time, rewind, audio] of [
     '-i',
     'test-results/camera.mp4',
     '-filter_complex',
-    buildEditPlan(160, 90, 2, time, rewind, audio),
+    buildEditPlan(160, 90, time, 5, audio, false),
     '-map',
     '[v]',
   ];
@@ -82,7 +82,7 @@ for (const [name, time, rewind, audio] of [
     ),
   );
   assert.ok(
-    Math.abs(Number(probe.format.duration) - 5.2) < 0.12,
+    Math.abs(Number(probe.format.duration) - (time + 5)) < 0.12,
     `${name}: unexpected duration ${probe.format.duration}`,
   );
   assert.equal(
@@ -91,7 +91,9 @@ for (const [name, time, rewind, audio] of [
   );
   assert.equal(probe.streams[0].width, 160);
   assert.equal(probe.streams[0].height, 90);
-  console.log(`PASS ${name}: source + 3.2s insert, dimensions, audio presence`);
+  console.log(
+    `PASS ${name}: source prefix + full 5s generated clip, dimensions, audio presence`,
+  );
 }
 // Exercise the actual shipped WebAssembly codec and filters, independently of browser UI.
 globalThis.self = { location: { href: import.meta.url } };
@@ -129,7 +131,7 @@ core.exec(
   '-i',
   'camera.mp4',
   '-filter_complex',
-  buildEditPlan(160, 90, 2, 1, true, true),
+  buildEditPlan(160, 90, 1, 5, true, false),
   '-map',
   '[v]',
   '-map',
@@ -146,5 +148,5 @@ core.exec(
 assert.equal(core.ret, 0);
 assert.ok(core.FS.readFile('output.mp4').length > 1000);
 console.log(
-  'PASS shipped WebAssembly core: ffprobe, reverse, concat, H.264/AAC export',
+  'PASS shipped WebAssembly core: ffprobe, prefix trim, concat, H.264/AAC export',
 );
