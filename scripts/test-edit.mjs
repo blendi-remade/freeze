@@ -53,7 +53,7 @@ for (const [name, time, audio] of [
     '-i',
     'test-results/camera.mp4',
     '-filter_complex',
-    buildEditPlan(160, 90, time, 5, audio, false),
+    buildEditPlan(160, 90, time, 5, 2, audio, false),
     '-map',
     '[v]',
   ];
@@ -82,7 +82,7 @@ for (const [name, time, audio] of [
     ),
   );
   assert.ok(
-    Math.abs(Number(probe.format.duration) - (time + 5)) < 0.12,
+    Math.abs(Number(probe.format.duration) - 7) < 0.12,
     `${name}: unexpected duration ${probe.format.duration}`,
   );
   assert.equal(
@@ -92,7 +92,7 @@ for (const [name, time, audio] of [
   assert.equal(probe.streams[0].width, 160);
   assert.equal(probe.streams[0].height, 90);
   console.log(
-    `PASS ${name}: source prefix + full 5s generated clip, dimensions, audio presence`,
+    `PASS ${name}: source prefix + full 5s generated clip + source tail, dimensions, audio presence`,
   );
 }
 // Exercise the actual shipped WebAssembly codec and filters, independently of browser UI.
@@ -131,7 +131,7 @@ core.exec(
   '-i',
   'camera.mp4',
   '-filter_complex',
-  buildEditPlan(160, 90, 1, 5, true, false),
+  buildEditPlan(160, 90, 1, 5, 2, true, false),
   '-map',
   '[v]',
   '-map',

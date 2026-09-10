@@ -135,6 +135,8 @@ export default function Home() {
     }
     setBusy(true);
     setError('');
+    setGenerated('');
+    setExported('');
     setPhase('Capturing this exact moment');
     videoRef.current.pause();
     setPlaying(false);
@@ -208,7 +210,7 @@ export default function Home() {
       setView('result');
       setPhase('Your finished edit is ready.');
     } catch (e) {
-      setView('result');
+      setView('source');
       setError(
         e instanceof Error
           ? e.message
@@ -218,7 +220,7 @@ export default function Home() {
       setBusy(false);
     }
   }
-  const hasResult = view === 'result' && generated;
+  const hasResult = view === 'result' && exported;
   return (
     <main className={`workspace ${source ? 'has-source' : ''}`}>
       <header className="app-header">
@@ -269,9 +271,9 @@ export default function Home() {
       >
         {source ? (
           <video
-            key={hasResult ? exported || generated : source}
+            key={hasResult ? exported : source}
             ref={videoRef}
-            src={hasResult ? exported || generated : source}
+            src={hasResult ? exported : source}
             playsInline
             controls={!!hasResult}
             onLoadedMetadata={() => {
@@ -329,7 +331,7 @@ export default function Home() {
               <Upload size={16} />
               Replace
             </button>
-            {generated && (
+            {exported && (
               <button
                 disabled={busy}
                 onClick={() => {
@@ -468,7 +470,15 @@ export default function Home() {
             </span>
           </div>
           <div className="primary-actions">
-            {!hasResult ? (
+            {generated && !exported ? (
+              <button
+                className="generate-button"
+                disabled={busy}
+                onClick={() => void exportEdit()}
+              >
+                {busy ? 'Assembling full video…' : 'Retry full video assembly'}
+              </button>
+            ) : !hasResult ? (
               <button
                 className="generate-button"
                 disabled={busy}
@@ -512,18 +522,17 @@ export default function Home() {
             )}
             <span>
               {hasResult
-                ? 'Original up to frame + generated clip'
+                ? 'Original → generated clip → original'
                 : 'Only the selected frame goes to fal'}
             </span>
-            {generated && (
-              <a
-                className="raw-link"
-                href={generated}
-                target="_blank"
-                rel="noreferrer"
+            {generated && exported && (
+              <button
+                className="quiet-button"
+                disabled={busy}
+                onClick={() => void exportEdit()}
               >
-                Open camera move ↗
-              </a>
+                Rebuild full video
+              </button>
             )}
           </div>
         </div>
@@ -610,7 +619,8 @@ export default function Home() {
           <DialogDescription>
             The selected frame becomes the first frame of an H3 Max camera move.
             The result contains your original footage up to the selected frame,
-            followed by the full generated clip.
+            followed by the full generated clip and the remaining original
+            footage.
           </DialogDescription>
           <pre>
             {JSON.stringify(

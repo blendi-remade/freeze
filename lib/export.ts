@@ -3,13 +3,36 @@ import { fetchFile } from '@ffmpeg/util';
 import { readVideo } from './video';
 import { buildEditPlan } from './edit-plan';
 
-// Runs entirely in the browser. The full source video never reaches our server.
+// Local development assembles on this machine; hosted builds use browser WebAssembly.
 export async function assembleEdit(
   file: File,
   cameraUrl: string,
   freezeAt: number,
   report: (message: string) => void,
 ): Promise<Blob> {
+  // Local development uses the installed native encoder, avoiding browser worker issues.
+  const local = await fetch('/api/local-config')
+    .then(
+      async (r) =>
+        r.ok && ((await r.json()) as { nativeExport?: boolean }).nativeExport,
+    )
+    .catch(() => false);
+  if (local) {
+    report('Assembling original + generated clip + original locally…');
+    const data = new FormData();
+    data.set('source', file);
+    data.set('cameraUrl', cameraUrl);
+    data.set('freezeAt', String(freezeAt));
+    const response = await fetch('/api/local-assemble', {
+      method: 'POST',
+      body: data,
+    });
+    if (!response.ok) {
+      const error = (await response.json()) as { error?: string };
+      throw new Error(error.error || 'Local assembly failed.');
+    }
+    return response.blob();
+  }
   const ff = new FFmpeg();
   const sourceUrl = URL.createObjectURL(file);
   try {
@@ -43,6 +66,7 @@ export async function assembleEdit(
         Math.round((metadata.videoWidth * ratio) / 2) * 2,
       ),
       height = Math.max(2, Math.round((metadata.videoHeight * ratio) / 2) * 2);
+    const sourceDuration = metadata.duration;
     metadata.removeAttribute('src');
     metadata.load();
     report('Preparing the source and camera move');
@@ -106,6 +130,7 @@ export async function assembleEdit(
       height,
       freezeAt,
       cameraDuration,
+      sourceDuration,
       hasAudio,
       cameraAudio,
     );
