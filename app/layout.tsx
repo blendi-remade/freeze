@@ -18,9 +18,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Freeze — Life moves. You don’t have to.',
+  title: 'Freeze — video editor',
   description:
-    'Pick a moment in your video. Move the camera around it. Then let life carry on. A bullet-time editor powered by H3 Max on fal.',
+    'Create a camera move from a frame in your video, then resume the original footage.',
 };
 
 export default function RootLayout({

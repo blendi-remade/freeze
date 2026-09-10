@@ -1,6 +1,6 @@
 # Freeze
 
-**Life moves. You don’t have to.**
+A video editor for frozen camera moves.
 
 Turn a moment in a real video into a bullet-time camera move, then resume the original action. Built with [MiniMax H3 Max Multi Angle on fal](https://fal.ai/models/minimax/h3-max/multi-angle/image-to-video).
 

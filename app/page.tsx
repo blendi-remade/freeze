@@ -4,14 +4,11 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import {
-  ArrowDown,
-  ArrowUpRight,
   Check,
   ChevronLeft,
   ChevronRight,
   Code2,
   Download,
-  KeyRound,
   Loader2,
   Pause,
   Play,
@@ -168,13 +165,13 @@ export default function Home() {
           setRenderPreset(preset);
           setExported('');
           setView('result');
-          setPhase('Camera move ready. Assemble your edit below.');
+          setPhase('Camera move ready. Assemble the finished edit.');
           return;
         }
         setPhase(
           state.status === 'IN_QUEUE'
-            ? 'In the queue. Your moment is on its way.'
-            : 'Moving the camera. Holding the moment.',
+            ? 'Queued on fal…'
+            : 'Generating camera move…',
         );
       }
       throw new Error(
@@ -215,346 +212,237 @@ export default function Home() {
       setBusy(false);
     }
   }
-  const active = PRESETS.find((p) => p.id === preset)!,
-    hasResult = view === 'result' && generated;
+  const hasResult = view === 'result' && generated;
   return (
-    <main className="studio">
-      <header className="masthead">
-        <Link className="wordmark" href="/" aria-label="Freeze home">
-          fr<span className="pause-glyph">Ⅱ</span>ze
-          <span className="wordmark-dot">↗</span>
+    <main className={`workspace ${source ? 'has-source' : ''}`}>
+      <header className="app-header">
+        <Link className="app-name" href="/" aria-label="Freeze home">
+          <Pause size={18} strokeWidth={3} />
+          freeze
         </Link>
-        <div className="edition">
-          <span className="status-dot" /> A MOMENT, FROM EVERY ANGLE
-        </div>
-        <div className="head-actions">
-          <button onClick={() => setRecipeOpen(true)}>
-            <Code2 size={16} />
-            <span>The recipe</span>
+        <span className="file-name">{file?.name || 'Untitled clip'}</span>
+        <div className="header-tools">
+          <button
+            className="quiet-button"
+            onClick={() => setRecipeOpen(true)}
+            aria-label="View API recipe"
+          >
+            <Code2 size={18} />
+            <span>Recipe</span>
           </button>
           <button
-            className={key ? 'connected' : ''}
+            className={`account-button ${key ? 'is-connected' : ''}`}
             onClick={() => setKeyOpen(true)}
           >
-            <KeyRound size={15} />
-            <span>{key ? 'Connected' : 'Connect fal'}</span>
+            <span className="connection-dot" />
+            {key ? 'fal connected' : 'Connect fal'}
           </button>
         </div>
       </header>
-      <section className="intro">
-        <div>
-          <p className="eyebrow">THE BULLET-TIME EDITOR / VOL. 001</p>
-          <h1>
-            Life moves.
-            <br />
-            <span>You don’t have to.</span>
-          </h1>
-        </div>
-        <p className="intro-copy">
-          Pick a moment. Move around it.
-          <br />
-          Then let life carry on.
-          <ArrowDown size={22} />
-        </p>
-      </section>
-      <section className="edit-room" aria-label="Video editor">
-        <div className="monitor-column">
-          <div className="monitor-bar">
-            <span>
-              <i />
-              {file?.name || 'YOUR NEXT IMPOSSIBLE SHOT'}
-            </span>
-            <span>
-              {hasResult
-                ? exported
-                  ? 'FINISHED EDIT'
-                  : 'CAMERA MOVE'
-                : 'SOURCE / 01'}
-            </span>
-          </div>
-          <div
-            className={`monitor ${drag ? 'dragging' : ''}`}
-            onDragOver={(e) => {
-              e.preventDefault();
-              if (!busy) setDrag(true);
+
+      <div
+        className={`stage ${drag ? 'is-dragging' : ''}`}
+        aria-label="Video preview"
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (!busy) setDrag(true);
+        }}
+        onDragLeave={() => setDrag(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDrag(false);
+          void upload(e.dataTransfer.files[0]);
+        }}
+      >
+        {source ? (
+          <video
+            key={hasResult ? exported || generated : source}
+            ref={videoRef}
+            src={hasResult ? exported || generated : source}
+            playsInline
+            controls={!!hasResult}
+            onLoadedMetadata={() => {
+              if (!hasResult && videoRef.current)
+                videoRef.current.currentTime = time;
             }}
-            onDragLeave={() => setDrag(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDrag(false);
-              void upload(e.dataTransfer.files[0]);
+            onTimeUpdate={() => {
+              if (!hasResult && playing && videoRef.current)
+                setTime(videoRef.current.currentTime);
             }}
-          >
-            {source ? (
-              <video
-                key={hasResult ? exported || generated : source}
-                ref={videoRef}
-                src={hasResult ? exported || generated : source}
-                playsInline
-                controls={!!hasResult}
-                onLoadedMetadata={() => {
-                  if (!hasResult && videoRef.current)
-                    videoRef.current.currentTime = time;
-                }}
-                onTimeUpdate={() => {
-                  if (!hasResult && playing && videoRef.current)
-                    setTime(videoRef.current.currentTime);
-                }}
-                onEnded={() => setPlaying(false)}
-              />
-            ) : (
-              <>
-                <img
-                  className="cover-image"
-                  src="/images/freeze-cover.jpg"
-                  alt="A skateboarder suspended above a concrete plaza"
-                />
-                <div className="cover-shade" />
-                <div className="viewfinder-corner tl" />
-                <div className="viewfinder-corner br" />
-                <div className="still-label">
-                  ILLUSTRATIVE STILL <span>FRAME / ∞</span>
-                </div>
-                <div className="cover-title">
-                  MAKE TIME
-                  <br />
-                  <em>STAND STILL.</em>
-                </div>
-                <button
-                  className="upload-cta"
-                  onClick={() => inputRef.current?.click()}
-                  disabled={busy}
-                >
-                  <Plus size={23} />
-                  <span>
-                    Drop your video here<small>or click to choose a clip</small>
-                  </span>
-                  <ArrowUpRight size={23} />
-                </button>
-                <span className="cover-footnote">
-                  MP4, MOV, WEBM · UP TO 60 SEC / 150 MB
-                </span>
-              </>
-            )}
-            {drag && (
-              <div className="drop-overlay">
-                <Upload size={40} />
-                Drop it. Freeze it.
-              </div>
-            )}
-            {source && !hasResult && (
-              <span className="frame-readout">
-                <span className="status-dot" />
-                {stamp(time)}
-              </span>
-            )}
-          </div>
-          <div className="transport">
-            <div className="transport-left">
+            onEnded={() => setPlaying(false)}
+          />
+        ) : (
+          <>
+            <img
+              className="preview-art"
+              src="/images/freeze-cover.jpg"
+              alt="Illustrative still of a skateboarder in midair"
+            />
+            <div className="art-dimmer" />
+            <div className="open-video">
               <button
-                aria-label={playing ? 'Pause' : 'Play'}
-                disabled={!source || !!hasResult || busy}
-                onClick={() => {
-                  if (!videoRef.current) return;
-                  if (playing) videoRef.current.pause();
-                  else void videoRef.current.play();
-                  setPlaying(!playing);
-                }}
-              >
-                {playing ? <Pause size={17} /> : <Play size={17} />}
-              </button>
-              <span>
-                {stamp(time)} <b>/ {stamp(duration)}</b>
-              </span>
-            </div>
-            <div className="transport-right">
-              {generated && (
-                <button
-                  onClick={() => {
-                    setView(view === 'source' ? 'result' : 'source');
-                    setPlaying(false);
-                  }}
-                  disabled={busy}
-                >
-                  {view === 'source' ? 'View result' : 'View original'}
-                </button>
-              )}
-              <button
-                disabled={!source || busy}
+                className="open-video-button"
+                disabled={busy}
                 onClick={() => inputRef.current?.click()}
               >
-                <Upload size={14} />
-                Replace clip
+                <Plus size={22} />
+                <span>Open a video</span>
               </button>
+              <p>or drop a clip anywhere</p>
             </div>
+            <span className="art-caption">Preview artwork</span>
+          </>
+        )}
+        {drag && (
+          <div className="drop-screen">
+            <Upload size={35} />
+            <span>Drop video to open</span>
           </div>
-          <div className="timeline-wrap">
-            <div className="timeline-heading">
-              <span>01 / FIND YOUR MOMENT</span>
+        )}
+        {source && (
+          <div className="stage-label">
+            <span className="stage-dot" />
+            {hasResult
+              ? exported
+                ? 'Finished edit'
+                : 'Generated camera move'
+              : 'Original'}
+            <span>{hasResult ? '' : stamp(time)}</span>
+          </div>
+        )}
+        {source && (
+          <div className="stage-tools">
+            <button onClick={() => inputRef.current?.click()} disabled={busy}>
+              <Upload size={16} />
+              Replace
+            </button>
+            {generated && (
+              <button
+                disabled={busy}
+                onClick={() => {
+                  setView(view === 'source' ? 'result' : 'source');
+                  setPlaying(false);
+                }}
+              >
+                {view === 'source' ? 'Show result' : 'Show original'}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="editing-deck">
+        <div className="timeline-row">
+          <button
+            className="play-control"
+            aria-label={playing ? 'Pause' : 'Play'}
+            disabled={!source || !!hasResult || busy}
+            onClick={() => {
+              if (!videoRef.current) return;
+              if (playing) videoRef.current.pause();
+              else void videoRef.current.play();
+              setPlaying(!playing);
+            }}
+          >
+            {playing ? <Pause size={17} /> : <Play size={17} />}
+          </button>
+          <div className="timeline">
+            <div className="timeline-meta">
               <span>
                 {source
-                  ? 'Scrub to the frame you want to freeze'
-                  : 'Your clip starts here'}
+                  ? 'Choose the frame to freeze'
+                  : 'Add a clip to choose a frame'}
+              </span>
+              <span>
+                {stamp(time)} <i>/ {stamp(duration)}</i>
               </span>
             </div>
-            <div className={`filmstrip ${!source ? 'empty-strip' : ''}`}>
-              {thumbs.length
-                ? thumbs.map((src, i) => <img key={i} src={src} alt="" />)
-                : Array.from({ length: 10 }, (_, i) => (
-                    <span key={i}>{String(i + 1).padStart(2, '0')}</span>
-                  ))}
-              <div
-                className="playhead"
-                style={{ left: `${duration ? (time / duration) * 100 : 44}%` }}
-              >
-                <span>Ⅱ</span>
-              </div>
+            <div className={`frames ${!source ? 'empty-frames' : ''}`}>
+              {thumbs.length ? (
+                thumbs.map((src, i) => <img src={src} key={i} alt="" />)
+              ) : (
+                <div className="empty-ticks" />
+              )}
+              {source && (
+                <div
+                  className="time-marker"
+                  style={{ left: `${(time / duration) * 100}%` }}
+                >
+                  <span />
+                </div>
+              )}
+              <Slider
+                className="time-slider"
+                aria-label="Freeze moment"
+                value={[time]}
+                onValueChange={(v) => scrub(Array.isArray(v) ? v[0] : v)}
+                min={0}
+                max={Math.max(0.01, duration - 0.05)}
+                step={0.01}
+                disabled={!source || busy || !!hasResult}
+              />
             </div>
-            <Slider
-              aria-label="Freeze moment"
-              className="scrubber"
-              value={[time]}
-              onValueChange={(v) => scrub(Array.isArray(v) ? v[0] : v)}
-              min={0}
-              max={Math.max(0.01, duration - 0.05)}
-              step={0.01}
+          </div>
+          <div className="frame-step">
+            <button
+              aria-label="Step back approximately one frame"
               disabled={!source || busy || !!hasResult}
-            />
-            <div className="timeline-ticks">
-              <span>00:00</span>
-              <div>
-                <button
-                  aria-label="Step back approximately one frame"
-                  disabled={!source || busy || !!hasResult}
-                  onClick={() => scrub(Math.max(0, time - 1 / 30))}
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <span>FINE TUNE</span>
-                <button
-                  aria-label="Step forward approximately one frame"
-                  disabled={!source || busy || !!hasResult}
-                  onClick={() =>
-                    scrub(Math.min(duration - 0.05, time + 1 / 30))
-                  }
-                >
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-              <span>{stamp(duration)}</span>
-            </div>
+              onClick={() => scrub(Math.max(0, time - 1 / 30))}
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <button
+              aria-label="Step forward approximately one frame"
+              disabled={!source || busy || !!hasResult}
+              onClick={() => scrub(Math.min(duration - 0.05, time + 1 / 30))}
+            >
+              <ChevronRight size={18} />
+            </button>
           </div>
         </div>
-        <aside className="director-panel">
-          <div className="panel-top">
-            <span className="eyebrow">02 / DIRECT THE CAMERA</span>
-            <span>+</span>
-          </div>
-          <h2>
-            One moment.
-            <br />A new perspective.
-          </h2>
-          <RadioGroup
-            className="preset-list"
-            aria-label="Camera move"
-            value={preset}
-            onValueChange={(v) => setPreset(v as PresetId)}
-            disabled={busy}
-          >
-            {PRESETS.map((p, i) => (
-              <label
-                key={p.id}
-                className={`preset ${preset === p.id ? 'selected' : ''}`}
-              >
-                <RadioGroupItem
-                  value={p.id}
-                  className="preset-radio"
-                  aria-label={p.name}
-                />
-                <span className="preset-number">0{i + 1}</span>
-                <span className="preset-copy">
-                  <strong>{p.name}</strong>
-                  <small>{p.description}</small>
-                </span>
-                <span className="preset-icon" aria-hidden="true">
-                  {p.id === 'swing' ? '↶' : p.id === 'rise' ? '⤴' : '⟳'}
-                </span>
-              </label>
-            ))}
-          </RadioGroup>
-          <div className="trajectory">
-            <div className="trajectory-title">
-              <span>CAMERA PATH</span>
-              <span>{active.angle}</span>
-            </div>
-            <svg
-              viewBox="0 0 300 110"
-              aria-label={`${active.name} camera trajectory diagram`}
-            >
-              <defs>
-                <pattern
-                  id="grid"
-                  width="20"
-                  height="20"
-                  patternUnits="userSpaceOnUse"
-                >
-                  <path
-                    d="M 20 0 L 0 0 0 20"
-                    fill="none"
-                    stroke="currentColor"
-                    opacity=".09"
-                  />
-                </pattern>
-              </defs>
-              <rect width="300" height="110" fill="url(#grid)" />
-              <ellipse
-                cx="150"
-                cy="62"
-                rx="104"
-                ry="29"
-                fill="none"
-                stroke="currentColor"
-                opacity=".2"
-                strokeDasharray="3 4"
-              />
-              <path
-                className="orbit-path"
-                d={
-                  preset === 'rise'
-                    ? 'M 150 91 Q 238 98 223 36 Q 214 2 150 18'
-                    : preset === 'orbit'
-                      ? 'M 150 91 A 104 29 0 1 1 151 91'
-                      : 'M 150 91 Q 249 94 254 62 Q 249 35 193 36'
-                }
-              />
-              <path
-                d="M 144 57 L 150 49 L 156 57 L 156 69 L 144 69 Z"
-                fill="currentColor"
-              />
-              <circle cx="150" cy="91" r="5" fill="var(--orange)" />
-            </svg>
-            <div className="trajectory-caption">
-              <span>● Frozen moment</span>
-              <span>{preset === 'orbit' ? 'Full rotation' : 'Out + back'}</span>
-            </div>
-          </div>
-          <div className="settings-row">
-            <label htmlFor="resolution">Render quality</label>
-            <NativeSelect
-              id="resolution"
-              value={resolution}
-              onChange={(e) => setResolution(e.target.value)}
+
+        <div className="control-row">
+          <div className="camera-controls">
+            <div className="control-label">Camera move</div>
+            <RadioGroup
+              className="camera-options"
+              aria-label="Camera move"
+              value={preset}
+              onValueChange={(v) => setPreset(v as PresetId)}
               disabled={busy}
             >
-              <option value="480P">480p · Draft</option>
-              <option value="768P">768p · Standard</option>
-              <option value="1080P">1080p · Refined</option>
-            </NativeSelect>
+              {PRESETS.map((p) => (
+                <label
+                  key={p.id}
+                  className={`camera-option ${preset === p.id ? 'active' : ''}`}
+                >
+                  <RadioGroupItem
+                    value={p.id}
+                    aria-label={p.name}
+                    className="camera-radio"
+                  />
+                  <CameraPath kind={p.id} />
+                  <span>{p.name}</span>
+                </label>
+              ))}
+            </RadioGroup>
           </div>
-          <div className="render-note">
-            <span>5 sec generation</span>
-            <span>
-              $
+          <div className="output-controls">
+            <div className="quality-control">
+              <label htmlFor="resolution">Quality</label>
+              <NativeSelect
+                id="resolution"
+                value={resolution}
+                onChange={(e) => setResolution(e.target.value)}
+                disabled={busy}
+              >
+                <option value="480P">480p</option>
+                <option value="768P">768p</option>
+                <option value="1080P">1080p</option>
+              </NativeSelect>
+            </div>
+            <span className="render-price">
+              5s · $
               {
                 (
                   { '480P': '0.25', '768P': '0.40', '1080P': '0.80' } as Record<
@@ -562,102 +450,88 @@ export default function Home() {
                     string
                   >
                 )[resolution]
-              }{' '}
-              / render*
+              }
+              <small>before launch discount</small>
             </span>
           </div>
-          <button
-            className="freeze-button"
-            disabled={busy || !!hasResult}
-            onClick={() => void generate()}
-          >
-            {busy ? (
-              <Loader2 className="spin" size={20} />
-            ) : (
-              <span className="button-pause">Ⅱ</span>
-            )}
-            <span>
-              {busy
-                ? 'Making your moment'
-                : source
-                  ? 'Freeze this moment'
-                  : 'Choose your video'}
-            </span>
-            <ArrowUpRight size={20} />
-          </button>
-          {generated && (
-            <div className="export-actions">
+          <div className="primary-actions">
+            {!hasResult ? (
               <button
-                className="export-button"
+                className="generate-button"
+                disabled={busy}
+                onClick={() => void generate()}
+              >
+                {busy ? (
+                  <Loader2 size={18} className="spin" />
+                ) : (
+                  <Pause size={18} />
+                )}
+                <span>
+                  {busy
+                    ? 'Generating…'
+                    : source
+                      ? 'Generate freeze'
+                      : 'Open video'}
+                </span>
+              </button>
+            ) : exported ? (
+              <a
+                className="generate-button"
+                href={exported}
+                download="freeze-edit.mp4"
+              >
+                <Download size={18} />
+                Download MP4
+              </a>
+            ) : (
+              <button
+                className="generate-button"
                 disabled={busy}
                 onClick={() => void exportEdit()}
               >
-                <Download size={16} />
-                {exported ? 'Rebuild finished edit' : 'Assemble finished edit'}
+                {busy ? (
+                  <Loader2 size={18} className="spin" />
+                ) : (
+                  <Download size={18} />
+                )}
+                <span>{busy ? 'Assembling…' : 'Assemble edit'}</span>
               </button>
-              {exported && (
-                <a
-                  className="download-link"
-                  href={exported}
-                  download="freeze-edit.mp4"
-                >
-                  Download your edit <ArrowDown size={16} />
-                </a>
-              )}
-              <a href={generated} target="_blank" rel="noreferrer">
-                Open raw camera move ↗
+            )}
+            <span>
+              {hasResult
+                ? 'Original + camera move + original'
+                : 'Only the selected frame goes to fal'}
+            </span>
+            {generated && (
+              <a
+                className="raw-link"
+                href={generated}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open camera move ↗
               </a>
-            </div>
-          )}
-          <p className="model-credit">
-            POWERED BY{' '}
-            <a
-              href="https://fal.ai/models/minimax/h3-max/multi-angle/image-to-video"
-              target="_blank"
-              rel="noreferrer"
-            >
-              H3 MAX ON FAL ↗
-            </a>
-          </p>
-          <p className="price-note">
-            *Standard rate. Launch discounts may apply.
-          </p>
-        </aside>
-      </section>
-      {(phase || error) && (
+            )}
+          </div>
+        </div>
         <div
-          className={`feedback ${error ? 'error' : ''}`}
-          role={error ? 'alert' : 'status'}
+          className={`status-line ${error ? 'has-error' : ''}`}
+          aria-live="polite"
         >
-          {error || phase}
+          {error ||
+            phase ||
+            (source
+              ? 'Scrub to a clear frame. Choose a camera move, then generate.'
+              : 'MP4, MOV or WebM · Up to 60 seconds · 150 MB max')}
+          <a
+            href="https://fal.ai/models/minimax/h3-max/multi-angle/image-to-video"
+            target="_blank"
+            rel="noreferrer"
+          >
+            H3 Max / fal ↗
+          </a>
         </div>
-      )}
-      <section className="explanation">
-        <div>
-          <span className="eyebrow">THE TRICK IS IN THE CUT.</span>
-          <h3>Real life. Impossible camera.</h3>
-        </div>
-        <div className="edit-equation">
-          <span>
-            YOUR VIDEO<small>Before the moment</small>
-          </span>
-          <b>→</b>
-          <span className="orange-text">
-            THE FREEZE<small>AI camera move</small>
-          </span>
-          <b>→</b>
-          <span>
-            YOUR VIDEO<small>Life carries on</small>
-          </span>
-        </div>
-      </section>
-      <footer>
-        <span>FREEZE / AN EXPERIMENT IN PERSPECTIVE</span>
-        <button onClick={() => setRecipeOpen(true)}>
-          Made to be taken apart. <Code2 size={15} />
-        </button>
-        <span>TIME IS YOURS. ↗</span>
-      </footer>
+      </div>
       <input
         ref={inputRef}
         type="file"
@@ -670,19 +544,18 @@ export default function Home() {
         }}
       />
       <Dialog open={keyOpen} onOpenChange={setKeyOpen}>
-        <DialogContent className="setup-dialog">
-          <DialogTitle>Connect your camera.</DialogTitle>
+        <DialogContent className="settings-dialog">
+          <DialogTitle>Connect fal</DialogTitle>
           <DialogDescription>
-            Use your fal API key to generate. Your key stays in this tab’s
-            memory and passes through this app’s server to fal. It is never
-            saved by this app.
+            Your key is kept in this tab’s memory and sent through this app’s
+            server to fal. It is never saved by the app.
           </DialogDescription>
-          <label htmlFor="fal-key">fal API key</label>
+          <label htmlFor="fal-key">API key</label>
           <input
             id="fal-key"
             type="password"
             autoComplete="off"
-            placeholder="Paste your fal key"
+            placeholder="Paste your fal API key"
             value={key}
             onChange={(e) => setKey(e.target.value.trim())}
           />
@@ -691,21 +564,23 @@ export default function Home() {
             target="_blank"
             rel="noreferrer"
           >
-            Get a key from fal ↗
+            Get an API key ↗
           </a>
           <p>
-            Generation is billed to your fal account. Closing or refreshing this
-            page clears the key.
+            Generations are billed to your fal account. Refreshing or closing
+            the page clears your key.
           </p>
           <button
-            className="freeze-button"
+            className="generate-button"
             onClick={() => setKeyOpen(false)}
             disabled={!key}
           >
-            Save for this session <Check size={18} />
+            <Check size={17} />
+            Connect
           </button>
           {key && (
             <button
+              className="quiet-button"
               onClick={() => {
                 setKey('');
                 setKeyOpen(false);
@@ -717,12 +592,12 @@ export default function Home() {
         </DialogContent>
       </Dialog>
       <Dialog open={recipeOpen} onOpenChange={setRecipeOpen}>
-        <DialogContent className="recipe-dialog">
-          <DialogTitle>The whole trick, in one recipe.</DialogTitle>
+        <DialogContent className="settings-dialog recipe-dialog">
+          <DialogTitle>Camera recipe</DialogTitle>
           <DialogDescription>
-            Extract one frame. Generate a camera move with H3 Max. Insert it
-            into the original video. Swing Back and Hero Rise reverse the move
-            to return to its opening frame.
+            The selected frame becomes the first frame of an H3 Max camera move.
+            Swing Back and Hero Rise reverse that move before the original video
+            resumes.
           </DialogDescription>
           <pre>
             {JSON.stringify(
@@ -732,7 +607,7 @@ export default function Home() {
             )}
           </pre>
           <button
-            className="freeze-button"
+            className="generate-button"
             onClick={async () => {
               try {
                 await navigator.clipboard.writeText(
@@ -749,18 +624,39 @@ export default function Home() {
               }
             }}
           >
-            {copied ? 'Copied' : 'Copy API input'}
-            <Code2 size={18} />
+            <Code2 size={17} />
+            {copied ? 'Copied' : 'Copy input'}
           </button>
           <a
             href="https://fal.ai/models/minimax/h3-max/multi-angle/image-to-video/api"
             target="_blank"
             rel="noreferrer"
           >
-            Read the endpoint docs ↗
+            API documentation ↗
           </a>
         </DialogContent>
       </Dialog>
     </main>
+  );
+}
+
+function CameraPath({ kind }: { kind: PresetId }) {
+  return (
+    <svg className="camera-path" viewBox="0 0 100 56" aria-hidden="true">
+      <ellipse cx="50" cy="30" rx="34" ry="13" className="path-guide" />
+      <path d="M50 13v25M43 33l7 5 7-5" className="path-axis" />
+      <circle cx="50" cy="29" r="4" className="path-subject" />
+      <path
+        className="path-motion"
+        d={
+          kind === 'orbit'
+            ? 'M50 43a34 13 0 1 1 1 0'
+            : kind === 'rise'
+              ? 'M50 43Q88 43 77 18Q68 4 50 7'
+              : 'M50 43Q84 44 84 30Q82 20 67 19'
+        }
+      />
+      <circle cx="50" cy="43" r="3" className="path-camera" />
+    </svg>
   );
 }
