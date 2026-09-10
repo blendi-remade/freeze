@@ -33,6 +33,9 @@ Score entry and exit seams 1–5, where 5 is visually unobtrusive. Watch the ent
 - Download MP4, check duration = full original duration + generated clip duration.
 - Narrow mobile layout and keyboard navigation through presets, slider and dialogs.
 - Browser engine download and worker loading on the deployed URL.
+- Add music before generation and to an existing finished edit; confirm Sonilo receives the complete edited video and one sample, and only runs when opted in.
+- Check soundtrack layering with and without existing audio; preserve picture frames and duration. Uncheck to restore the clean edit, then recheck to reuse the soundtrack.
+- Music upload/queue/mix failures keep the video downloadable; Retry music polls an existing job without starting another paid request.
 
 ## Launch gate (proposed)
 

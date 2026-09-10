@@ -13,7 +13,7 @@
     "format": "oxfmt",
     "postinstall": "node scripts/prepare-ffmpeg.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types scripts/test-edit.mjs"
+    "test": "node --experimental-strip-types scripts/test-edit.mjs && node scripts/test-music.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",

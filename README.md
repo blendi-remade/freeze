@@ -41,6 +41,12 @@ Open the local URL printed in the terminal. Alternatively, leave the key file un
 
 **Rebuild full video** reuses the existing generation without another model call. Keep the tab open until you download your result; projects are not saved across refreshes.
 
+### Add music
+
+Check **Add music** before generating, or after the finished edit is ready. Freeze uploads the complete assembled MP4 to fal and calls [Sonilo v1.1 video-to-music](https://fal.ai/models/sonilo/v1.1/video-to-music) with one sample, then layers the returned soundtrack under any existing audio. The preview and download both include the music; the edited picture is copied without another video encode. Uncheck the box to return to the version without music.
+
+Music costs $0.009 per second of output, in addition to camera generation. Unlike the camera effect, music requires uploading the **whole edited video** to fal. Finished uploads are limited to 150 MB. If music fails, the video without music stays available. **Retry music** reuses the known music request or downloaded track within the current tab; rebuilding the edit creates a new music request when the checkbox is selected.
+
 ## Camera controls
 
 | Preset | Path | Requested duration |
