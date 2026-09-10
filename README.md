@@ -19,9 +19,9 @@ npm ci
 npm run dev
 ```
 
-Open the printed local URL. Select **Connect fal** and paste your [fal API key](https://fal.ai/dashboard/keys). Upload a short clip, scrub to the moment, choose a camera move, and generate. Once the move is ready, choose **Assemble finished edit** and download the MP4.
+Open the printed local URL. For local use, put `FAL_KEY=your_key` in `.dev.vars` (ignored by Git), or use **Connect fal** to enter a session-only key. Upload a short clip, scrub to the moment, choose a camera move, and generate. Once the move is ready, choose **Assemble finished edit** and download the MP4.
 
-Your API key lives only in React state for the current tab. It is sent through the same-origin server relay to fal and is never persisted by this application. Refreshing clears it. The original video stays in the browser; only the selected JPEG frame is sent to fal. fal processes and stores generated media under its own policies.
+The local demo reads its key from `.dev.vars`. Local `.env*` and `.dev.vars*` secret files are ignored by Git. The optional manually entered key lives only in tab memory and is sent through the server relay; refreshing clears that optional key. Server credentials are never returned to the browser. The original video stays in the browser; only the selected JPEG frame is sent to fal. fal processes and stores generated media under its own policies.
 
 ## Three camera moves
 
@@ -72,11 +72,11 @@ npm run build
 
 `npm test` also requires native `ffmpeg` and `ffprobe` on PATH. It builds small synthetic fixtures, verifies middle/start/end insertion duration, dimensions and audio handling, then tests the same filter graph with the actual shipped WebAssembly core. The lint command covers authored app, library and script code; the starter's vendored UI catalog is not modified.
 
-See [the real-footage test plan](docs/testing.md) and [launch copy + demo storyboard](docs/launch.md).
+See [the real-footage test plan](docs/testing.md).
 
 ## Hosting and reuse
 
-The app has no persistent data or required runtime secrets because each visitor supplies their own fal key. Do not introduce a shared billed key without authentication and abuse controls.
+This deployment is owner-private and uses a server-side `FAL_KEY` secret. Keep it private while using that key. For a public deployment, add authentication and spending controls or remove the server key and use the optional bring-your-own-key flow.
 
 The checked-in `.openai/hosting.json` identifies this project's private Sites deployment. For your own Sites deployment, register your own Site and replace `project_id`; do not push to the original project's source remote. Outside Sites, preserve the generated Worker build and configure your own Cloudflare Worker/assets deployment.
 

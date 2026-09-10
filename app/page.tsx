@@ -43,6 +43,15 @@ export default function Home() {
     [thumbs, setThumbs] = useState<string[]>([]);
   const [preset, setPreset] = useState<PresetId>('swing'),
     [resolution, setResolution] = useState('768P');
+  const [serverKey, setServerKey] = useState(false);
+  useEffect(() => {
+    void fetch('/api/config')
+      .then((r) => r.json())
+      .then((data) =>
+        setServerKey(Boolean((data as { configured?: boolean }).configured)),
+      )
+      .catch(() => {});
+  }, []);
   const [key, setKey] = useState(''),
     [keyOpen, setKeyOpen] = useState(false),
     [recipeOpen, setRecipeOpen] = useState(false);
@@ -121,7 +130,7 @@ export default function Home() {
       inputRef.current?.click();
       return;
     }
-    if (!key) {
+    if (!key && !serverKey) {
       setKeyOpen(true);
       return;
     }
@@ -230,13 +239,20 @@ export default function Home() {
             <Code2 size={18} />
             <span>Recipe</span>
           </button>
-          <button
-            className={`account-button ${key ? 'is-connected' : ''}`}
-            onClick={() => setKeyOpen(true)}
-          >
-            <span className="connection-dot" />
-            {key ? 'fal connected' : 'Connect fal'}
-          </button>
+          {serverKey ? (
+            <span className="account-button is-connected">
+              <span className="connection-dot" />
+              fal ready
+            </span>
+          ) : (
+            <button
+              className={`account-button ${key ? 'is-connected' : ''}`}
+              onClick={() => setKeyOpen(true)}
+            >
+              <span className="connection-dot" />
+              {key ? 'fal connected' : 'Connect fal'}
+            </button>
+          )}
         </div>
       </header>
 
