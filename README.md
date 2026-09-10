@@ -1,67 +1,79 @@
 # Freeze
 
-A video editor for frozen camera moves.
+Turn one frame of a video into a camera orbit with [MiniMax H3 Max Multi Angle on fal](https://fal.ai/models/minimax/h3-max/multi-angle/image-to-video), then resume the original action.
 
-Turn a moment in a real video into a bullet-time camera move, append it to the original footage up to your selected frame. Built with [MiniMax H3 Max Multi Angle on fal](https://fal.ai/models/minimax/h3-max/multi-angle/image-to-video).
-
-![Freeze art direction — illustrative still, not an endpoint result](public/images/freeze-cover.jpg)
+![Freeze editor with a backflip loaded and Full Orbit selected](docs/images/editor.png)
 
 ```text
-Original footage up to selected frame → full H3 Max generated clip → remaining original footage
+Original up to the selected frame → generated camera move → rest of the original
 ```
 
-## Try it locally
+## Run locally
 
-Requires Node.js 22.13+ and npm. Install `ffmpeg` and `ffprobe` on PATH for reliable native local assembly.
+Requires Node.js 22.13+ and npm. Install **FFmpeg and ffprobe** on your PATH for native local export.
 
 ```bash
+git clone https://github.com/blendi-remade/freeze.git
+cd freeze
 npm ci
+```
+
+Create a `.dev.vars` file in the project root:
+
+```dotenv
+FAL_KEY=your_fal_key
+```
+
+Then start the app:
+
+```bash
 npm run dev
 ```
 
-Open the printed local URL. For local use, put `FAL_KEY=your_key` in `.dev.vars` (ignored by Git), or use **Connect fal** to enter a session-only key. Upload a short clip, scrub to the moment, choose a camera move, and generate. The app automatically assembles the combined video. Download the finished MP4 when it is ready.
+Open the local URL printed in the terminal. Alternatively, leave the key file unset and use **Connect fal** to enter a key for the current tab. `.dev.vars*` and `.env*` files are ignored by Git; never commit your key.
 
-The local demo reads its key from `.dev.vars`. Local `.env*` and `.dev.vars*` secret files are ignored by Git. The optional manually entered key lives only in tab memory and is sent through the server relay; refreshing clears that optional key. Server credentials are never returned to the browser. Only the selected JPEG frame is sent to fal. In local development, your original video is processed by FFmpeg on your machine. fal processes and stores generated media under its own policies.
+## Make an edit
 
-## Three camera moves
+1. Open or drop a video. H.264 MP4 is the most predictable format. Clips can be 1–60 seconds and up to 150 MB.
+2. Scrub to a sharp frame at the moment you want to freeze.
+3. Choose a camera move and resolution, then select **Generate freeze**.
+4. The app generates the camera move and automatically assembles the complete video. Download the finished MP4.
 
-| Move       | Generated camera path                | Edit treatment                     |
-| ---------- | ------------------------------------ | ---------------------------------- |
-| Side Arc   | 0° → 65° azimuth, 0° → 8° elevation  | Full generated clip                |
-| Hero Rise  | 0° → 35° azimuth, 0° → 30° elevation | Full generated clip                |
-| Full Orbit | 0° → 360° azimuth                    | One continuous orbit; experimental |
+**Rebuild full video** reuses the existing generation without another model call. Keep the tab open until you download your result; projects are not saved across refreshes.
 
-All presets keep normalized distance at 1. The output is the original video from the beginning up to the selected timestamp, followed by the full generated clip at normal speed. The remainder of the original video resumes immediately after the generated clip. The camera clip is not reversed or sped up. Assembly starts automatically when generation completes.
+## Camera controls
 
-The **recipe** panel exposes the actual endpoint payload. Edit `lib/recipe.ts` to design another move.
+| Preset | Path | Requested duration |
+| --- | --- | --- |
+| Full Orbit (default) | 0° → 360° azimuth, level elevation | 6 seconds |
+| Side Arc | 0° → 65° azimuth, 0° → 8° elevation | 5 seconds |
+| Hero Rise | 0° → 35° azimuth, 0° → 30° elevation | 5 seconds |
 
-## Architecture
+Full Orbit uses nine keyframes, reaching 360° at normalized time 0.833333. All presets use constant normalized camera distance, balanced prompt expansion, and no fixed seed. The **Recipe** panel shows the endpoint payload; edit `lib/recipe.ts` to adjust prompts and trajectories.
 
-- React + TypeScript, Vinext/Vite, Cloudflare-compatible API routes.
-- Browser video decoding, thumbnail extraction, and frame capture.
-- Server relay submits a fixed five-second request and polls the fal queue. Safety checking stays enabled.
-- Local development uses native FFmpeg through a Vite-only assembly endpoint. Temporary source and output files are deleted after the request. Hosted builds fall back to browser WebAssembly.
-- H.264 MP4 export at 30 fps, source aspect ratio, maximum long edge 1280 px. Source-prefix audio and generated audio are retained when present, with silence for a segment that has no audio.
-- The browser fallback editing engine is downloaded only when exporting. Its approximately 32 MB WASM file is delivered in two pieces to respect static hosting file limits.
+The Full Orbit prompt retains the playground wording that worked in our test, including scene-specific parking-ceiling and furniture references. It is a starting point for experimentation, not a universal prompt.
 
-## Current boundaries
+## How it works
 
-This is a working first version awaiting live model evaluation on varied footage. Automated codec and timeline tests are included; model quality and end-to-end browser behavior are not yet validated.
+- The browser extracts a JPEG at your selected timestamp. Only that frame is sent to fal for generation.
+- Server routes submit the request and poll the fal queue. Server-configured keys are never returned to the browser. Manually entered keys live in tab memory and are passed to the relay.
+- In local development, native FFmpeg assembles the source prefix, generated clip, and source tail. Temporary assembly files are removed afterward.
+- The generated clip sets the output dimensions. The original is resized to match without cropping or padding, which can slightly change its proportions.
+- A 0.2-second blend at the end of the generated clip returns to the original freeze frame before the source action resumes. No optical-flow alignment is applied.
+- Output is H.264 MP4 at 30 fps. Audio from each segment is retained when available, with silence substituted where needed.
+- When native local export is unavailable, the app falls back to browser FFmpeg WebAssembly. The approximately 32 MB engine loads on demand; browser export can be slower and use substantial memory.
 
-- Inputs: browser-decodable video, 1–60 seconds, up to 150 MB. H.264 MP4 is the most predictable choice; MOV/HEVC support depends on the browser.
-- Export needs a WebAssembly-capable browser and can be slow or memory constrained on phones. Start with a short 720p/1080p clip on desktop.
-- HDR footage is not explicitly tone-mapped. Use SDR clips for initial tests.
-- No automatic color matching, optical-flow seam repair, speed ramps, subject tracking, or guaranteed frozen geometry yet.
-- Fine stepping uses 1/30-second increments; it is not native frame indexing for variable-frame-rate sources.
-- Full Orbit can drift at the return and reveal invented surfaces. It is deliberately labeled experimental.
-- No accounts, saved projects, shared media gallery, or automatic retries. Export your work before refreshing.
-- After a polling timeout or network interruption, check your fal dashboard before generating again: the prior job may still run and be billed.
+Built with React, TypeScript, Vinext/Vite, and Cloudflare-compatible API routes.
 
-## Costs
+## What to expect
 
-As documented September 9, 2026, a five-second request is $0.0625 / $0.10 / $0.20 at 480P / 768P / 1080P during the launch promotion. Listed standard prices after the promotion are $0.25 / $0.40 / $0.80. The UI shows standard prices. Check [current endpoint pricing](https://fal.ai/models/minimax/h3-max/multi-angle/image-to-video/llms.txt) before running a batch. 1080P is a refinement of native 768P, while this first export pipeline caps the final long edge at 1280 px.
+This is an experimental demo. We have tested real backflip footage, but results vary with the frame and camera path. H3 may animate subjects, invent unseen geometry, or change framing and lighting. The exit blend softens a cut; it does not guarantee a seamless return.
 
-## Validate
+Use a short SDR clip and a sharp freeze frame for initial tests. HDR tone mapping, automatic color matching, subject tracking, and exact variable-frame-rate stepping are not implemented. Timeline stepping uses 1/30-second increments.
+
+Generation is billed to your fal account. Check [current endpoint pricing](https://fal.ai/models/minimax/h3-max/multi-angle/image-to-video) before running a batch. The UI displays standard-price estimates; promotions and actual billing may differ. If polling times out, check your fal dashboard before submitting another request.
+
+## Development checks
 
 ```bash
 npm run typecheck
@@ -70,18 +82,16 @@ npm test
 npm run build
 ```
 
-`npm test` also requires native `ffmpeg` and `ffprobe` on PATH. It builds small synthetic fixtures, verifies middle/start/end insertion duration, dimensions and audio handling, then tests the same filter graph with the actual shipped WebAssembly core. The lint command covers authored app, library and script code; the starter's vendored UI catalog is not modified.
+Tests require native FFmpeg and ffprobe. They check timeline duration, output dimensions and audio for several insertion points, including mismatched source/generated aspect ratios, and exercise the shipped WebAssembly encoder. See [the footage test plan](docs/testing.md) for manual checks.
 
-See [the real-footage test plan](docs/testing.md).
+## Hosting
 
-## Hosting and reuse
+The app is intended to run locally with your own key. If hosting it with a server-side key, add authentication and spending controls before making it public.
 
-This deployment is owner-private and uses a server-side `FAL_KEY` secret. Keep it private while using that key. For a public deployment, add authentication and spending controls or remove the server key and use the optional bring-your-own-key flow.
+The checked-in `.openai/hosting.json` belongs to the original private Sites deployment. Register your own Site and replace its project ID when deploying a fork through Sites. Other deployments need a compatible Worker/assets setup. The native assembly middleware runs only in local development; hosted exports use the browser fallback.
 
-The checked-in `.openai/hosting.json` identifies this project's private Sites deployment. For your own Sites deployment, register your own Site and replace `project_id`; do not push to the original project's source remote. Outside Sites, preserve the generated Worker build and configure your own Cloudflare Worker/assets deployment.
+## License
 
-## License and credits
+Application code is MIT. The H3 Max endpoint is a separate paid service with its own terms. The screenshot shows the editor with sample footage; that footage is not included in the code license or bundled as a video. The empty-state illustration is AI-generated artwork, not a model result.
 
-Application source: MIT. Cover artwork is AI-generated illustrative art and is not a demonstration of H3 Max output. The H3 Max service has its own terms and pricing.
-
-FFmpeg WebAssembly is a separate worker-loaded third-party component. `@ffmpeg/ffmpeg` and `@ffmpeg/util` are MIT; `@ffmpeg/core` is GPL-2.0-or-later. See [third-party notices](THIRD_PARTY_NOTICES.md), preserve its license obligations when redistributing the runtime, and consult the linked source/build instructions. The `sharp` override supplies the patched version for the hosting toolchain.
+`@ffmpeg/ffmpeg` and `@ffmpeg/util` are MIT; the bundled `@ffmpeg/core` is GPL-2.0-or-later. See [third-party notices](THIRD_PARTY_NOTICES.md) and preserve the applicable notices and source obligations when redistributing it.

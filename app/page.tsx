@@ -1,8 +1,8 @@
-'use client';
+"use client";
 // Blob thumbnails stay local; user-uploaded clips do not include caption files.
 /* oxlint-disable next/no-img-element, jsx-a11y/media-has-caption */
-import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import {
   Check,
   ChevronLeft,
@@ -10,60 +10,76 @@ import {
   Code2,
   Download,
   Loader2,
+  Maximize,
+  Volume2,
+  VolumeX,
   Pause,
   Play,
   Plus,
   Upload,
-} from 'lucide-react';
-import { Slider } from '@/components/ui/slider';
-import { NativeSelect } from '@/components/ui/native-select';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+} from "lucide-react";
+import { Slider } from "@/components/ui/slider";
+import { NativeSelect } from "@/components/ui/native-select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { PRESETS, type PresetId, makeInput } from '@/lib/recipe';
-import { extractFrame, makeThumbnails, readVideo } from '@/lib/video';
+} from "@/components/ui/dialog";
+import { PRESETS, type PresetId, makeInput } from "@/lib/recipe";
+import { extractFrame, makeThumbnails, readVideo } from "@/lib/video";
 
 const stamp = (t: number) =>
   `${Math.floor(t / 60)
     .toString()
-    .padStart(2, '0')}:${(t % 60).toFixed(2).padStart(5, '0')}`;
+    .padStart(2, "0")}:${(t % 60).toFixed(2).padStart(5, "0")}`;
 export default function Home() {
   const inputRef = useRef<HTMLInputElement>(null),
     videoRef = useRef<HTMLVideoElement>(null);
-  const objectUrl = useRef(''),
-    resultUrl = useRef('');
+  const dragDepth = useRef(0);
+  const [resultTime, setResultTime] = useState(0);
+  const [resultDuration, setResultDuration] = useState(0);
+  const [muted, setMuted] = useState(false);
+  const objectUrl = useRef(""),
+    resultUrl = useRef("");
   const [file, setFile] = useState<File | null>(null),
-    [source, setSource] = useState('');
+    [source, setSource] = useState("");
   const [duration, setDuration] = useState(0),
     [time, setTime] = useState(0),
     [thumbs, setThumbs] = useState<string[]>([]);
-  const [preset, setPreset] = useState<PresetId>('swing'),
-    [resolution, setResolution] = useState('768P');
+  const [preset, setPreset] = useState<PresetId>("orbit"),
+    [resolution, setResolution] = useState("768P");
   const [serverKey, setServerKey] = useState(false);
   useEffect(() => {
-    void fetch('/api/config')
+    void fetch("/api/config")
       .then((r) => r.json())
       .then((data) =>
         setServerKey(Boolean((data as { configured?: boolean }).configured)),
       )
       .catch(() => {});
   }, []);
-  const [key, setKey] = useState(''),
+  const [key, setKey] = useState(""),
     [keyOpen, setKeyOpen] = useState(false),
     [recipeOpen, setRecipeOpen] = useState(false);
   const [drag, setDrag] = useState(false),
-    [playing, setPlaying] = useState(false),
-    [busy, setBusy] = useState(false);
-  const [phase, setPhase] = useState(''),
-    [error, setError] = useState(''),
-    [generated, setGenerated] = useState(''),
-    [exported, setExported] = useState('');
+    [playing, setPlaying] = useState(false);
+  const [activity, setActivity] = useState<
+    "idle" | "reading" | "generating" | "assembling"
+  >("idle");
+  const busy = activity !== "idle";
+  const busyLabel =
+    activity === "reading"
+      ? "Preparing video…"
+      : activity === "assembling"
+        ? "Assembling video…"
+        : "Generating…";
+  const [phase, setPhase] = useState(""),
+    [error, setError] = useState(""),
+    [generated, setGenerated] = useState(""),
+    [exported, setExported] = useState("");
   const [freezeAt, setFreezeAt] = useState(0);
-  const [view, setView] = useState<'source' | 'result'>('source'),
+  const [view, setView] = useState<"source" | "result">("source"),
     [copied, setCopied] = useState(false);
   useEffect(
     () => () => {
@@ -74,13 +90,13 @@ export default function Home() {
   );
   async function upload(next?: File) {
     if (!next || busy) return;
-    setError('');
-    if (!next.type.startsWith('video/'))
-      return setError('Choose a video file, such as MP4, MOV, or WebM.');
+    setError("");
+    if (!next.type.startsWith("video/"))
+      return setError("Choose a video file, such as MP4, MOV, or WebM.");
     if (next.size > 150 * 1024 * 1024)
-      return setError('Choose a video smaller than 150 MB.');
-    setBusy(true);
-    setPhase('Reading your clip');
+      return setError("Choose a video smaller than 150 MB.");
+    setActivity("reading");
+    setPhase("Reading your clip");
     const url = URL.createObjectURL(next);
     try {
       const video = await readVideo(url);
@@ -89,7 +105,7 @@ export default function Home() {
         video.duration < 1 ||
         video.duration > 60
       )
-        throw new Error('Choose a clip between 1 and 60 seconds long.');
+        throw new Error("Choose a clip between 1 and 60 seconds long.");
       const frames = await makeThumbnails(video, 10);
       URL.revokeObjectURL(objectUrl.current);
       objectUrl.current = url;
@@ -98,27 +114,27 @@ export default function Home() {
       setDuration(video.duration);
       setTime(video.duration / 2);
       setThumbs(frames);
-      setGenerated('');
-      setExported('');
-      setView('source');
+      setGenerated("");
+      setExported("");
+      setView("source");
       setPlaying(false);
-      video.removeAttribute('src');
+      video.removeAttribute("src");
       video.load();
     } catch (e) {
       URL.revokeObjectURL(url);
       setError(
         e instanceof Error
           ? e.message
-          : 'This video could not be opened. Try an MP4.',
+          : "This video could not be opened. Try an MP4.",
       );
     } finally {
-      setBusy(false);
-      setPhase('');
+      setActivity("idle");
+      setPhase("");
     }
   }
   function scrub(value: number) {
     setTime(value);
-    if (videoRef.current && view === 'source') {
+    if (videoRef.current && view === "source") {
       videoRef.current.pause();
       videoRef.current.currentTime = value;
       setPlaying(false);
@@ -133,20 +149,20 @@ export default function Home() {
       setKeyOpen(true);
       return;
     }
-    setBusy(true);
-    setError('');
-    setGenerated('');
-    setExported('');
-    setPhase('Capturing this exact moment');
+    setActivity("generating");
+    setError("");
+    setGenerated("");
+    setExported("");
+    setPhase("Capturing this exact moment");
     videoRef.current.pause();
     setPlaying(false);
     try {
       const frame = await extractFrame(videoRef.current, time),
         frozenTime = time;
-      setPhase('Sending your frame to H3 Max');
-      const response = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Fal-Key': key },
+      setPhase("Sending your frame to H3 Max");
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Fal-Key": key },
         body: JSON.stringify(makeInput(frame, preset, resolution)),
       });
       const job = (await response.json()) as {
@@ -154,13 +170,13 @@ export default function Home() {
         request_id: string;
       };
       if (!response.ok)
-        throw new Error(job.error || 'Could not start generation.');
+        throw new Error(job.error || "Could not start generation.");
       const started = Date.now();
       while (Date.now() - started < 600000) {
         await new Promise((r) => setTimeout(r, 2000));
         const response = await fetch(
           `/api/jobs/${encodeURIComponent(job.request_id)}`,
-          { headers: { 'X-Fal-Key': key } },
+          { headers: { "X-Fal-Key": key } },
         );
         const state = (await response.json()) as {
           error?: string;
@@ -168,36 +184,36 @@ export default function Home() {
           video?: { url: string };
         };
         if (!response.ok)
-          throw new Error(state.error || 'Could not check generation.');
+          throw new Error(state.error || "Could not check generation.");
         if (state.video?.url) {
           setGenerated(state.video.url);
           setFreezeAt(frozenTime);
-          setExported('');
+          setExported("");
           await exportEdit(state.video.url, frozenTime);
           return;
         }
         setPhase(
-          state.status === 'IN_QUEUE'
-            ? 'Queued on fal…'
-            : 'Generating camera move…',
+          state.status === "IN_QUEUE"
+            ? "Queued on fal…"
+            : "Generating camera move…",
         );
       }
       throw new Error(
-        'This request is taking longer than expected. Check your fal dashboard before retrying.',
+        "This request is taking longer than expected. Check your fal dashboard before retrying.",
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Generation failed.');
-      setPhase('');
+      setError(e instanceof Error ? e.message : "Generation failed.");
+      setPhase("");
     } finally {
-      setBusy(false);
+      setActivity("idle");
     }
   }
   async function exportEdit(cameraUrl = generated, selectedTime = freezeAt) {
     if (!file || !cameraUrl) return;
-    setBusy(true);
-    setError('');
+    setActivity("assembling");
+    setError("");
     try {
-      const { assembleEdit } = await import('@/lib/export');
+      const { assembleEdit } = await import("@/lib/export");
       const output = await assembleEdit(
         file,
         cameraUrl,
@@ -207,28 +223,28 @@ export default function Home() {
       URL.revokeObjectURL(resultUrl.current);
       resultUrl.current = URL.createObjectURL(output);
       setExported(resultUrl.current);
-      setView('result');
-      setPhase('Your finished edit is ready.');
+      setView("result");
+      setPhase("Your finished edit is ready.");
     } catch (e) {
-      setView('source');
+      setView("source");
       setError(
         e instanceof Error
           ? e.message
-          : 'Export failed. You can still download the camera move.',
+          : "Export failed. You can still download the camera move.",
       );
     } finally {
-      setBusy(false);
+      setActivity("idle");
     }
   }
-  const hasResult = view === 'result' && exported;
+  const hasResult = view === "result" && exported;
   return (
-    <main className={`workspace ${source ? 'has-source' : ''}`}>
+    <main className={`workspace ${source ? "has-source" : ""}`}>
       <header className="app-header">
         <Link className="app-name" href="/" aria-label="Freeze home">
           <Pause size={18} strokeWidth={3} />
           freeze
         </Link>
-        <span className="file-name">{file?.name || 'Untitled clip'}</span>
+        <span className="file-name">{file?.name || "Untitled clip"}</span>
         <div className="header-tools">
           <button
             className="quiet-button"
@@ -245,26 +261,37 @@ export default function Home() {
             </span>
           ) : (
             <button
-              className={`account-button ${key ? 'is-connected' : ''}`}
+              className={`account-button ${key ? "is-connected" : ""}`}
               onClick={() => setKeyOpen(true)}
             >
               <span className="connection-dot" />
-              {key ? 'fal connected' : 'Connect fal'}
+              {key ? "fal connected" : "Connect fal"}
             </button>
           )}
         </div>
       </header>
 
       <div
-        className={`stage ${drag ? 'is-dragging' : ''}`}
+        className={`stage ${drag ? "is-dragging" : ""}`}
         aria-label="Video preview"
+        onDragEnter={(e) => {
+          e.preventDefault();
+          if (busy || !e.dataTransfer.types.includes("Files")) return;
+          dragDepth.current += 1;
+          setDrag(true);
+        }}
         onDragOver={(e) => {
           e.preventDefault();
-          if (!busy) setDrag(true);
+          e.dataTransfer.dropEffect = busy ? "none" : "copy";
         }}
-        onDragLeave={() => setDrag(false)}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          dragDepth.current = Math.max(0, dragDepth.current - 1);
+          if (dragDepth.current === 0) setDrag(false);
+        }}
         onDrop={(e) => {
           e.preventDefault();
+          dragDepth.current = 0;
           setDrag(false);
           void upload(e.dataTransfer.files[0]);
         }}
@@ -275,12 +302,21 @@ export default function Home() {
             ref={videoRef}
             src={hasResult ? exported : source}
             playsInline
-            controls={!!hasResult}
+            muted={muted}
+            onPlay={() => setPlaying(true)}
+            onPause={() => setPlaying(false)}
             onLoadedMetadata={() => {
+              setPlaying(false);
+              if (hasResult && videoRef.current) {
+                setResultDuration(videoRef.current.duration);
+                setResultTime(0);
+              }
               if (!hasResult && videoRef.current)
                 videoRef.current.currentTime = time;
             }}
             onTimeUpdate={() => {
+              if (hasResult && videoRef.current)
+                setResultTime(videoRef.current.currentTime);
               if (!hasResult && playing && videoRef.current)
                 setTime(videoRef.current.currentTime);
             }}
@@ -308,6 +344,53 @@ export default function Home() {
             <span className="art-caption">Preview artwork</span>
           </>
         )}
+        {hasResult && (
+          <fieldset
+            className="result-playback"
+            aria-label="Result playback controls"
+          >
+            <button
+              aria-label={playing ? "Pause result" : "Play result"}
+              onClick={() => {
+                const video = videoRef.current;
+                if (!video) return;
+                if (video.paused) void video.play();
+                else video.pause();
+              }}
+            >
+              {playing ? <Pause size={16} /> : <Play size={16} />}
+            </button>
+            <span>{stamp(resultTime)}</span>
+            <input
+              aria-label="Seek result"
+              type="range"
+              min={0}
+              max={resultDuration || 1}
+              step={0.01}
+              value={resultTime}
+              onChange={(e) => {
+                const value = Number(e.target.value);
+                if (videoRef.current) videoRef.current.currentTime = value;
+                setResultTime(value);
+              }}
+            />
+            <span>{stamp(resultDuration)}</span>
+            <button
+              aria-label={muted ? "Unmute result" : "Mute result"}
+              onClick={() => setMuted(!muted)}
+            >
+              {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+            </button>
+            <button
+              aria-label="Fullscreen result"
+              onClick={() => {
+                void videoRef.current?.parentElement?.requestFullscreen();
+              }}
+            >
+              <Maximize size={16} />
+            </button>
+          </fieldset>
+        )}
         {drag && (
           <div className="drop-screen">
             <Upload size={35} />
@@ -319,10 +402,10 @@ export default function Home() {
             <span className="stage-dot" />
             {hasResult
               ? exported
-                ? 'Finished edit'
-                : 'Generated camera move'
-              : 'Original'}
-            <span>{hasResult ? '' : stamp(time)}</span>
+                ? "Finished edit"
+                : "Generated camera move"
+              : "Original"}
+            <span>{hasResult ? "" : stamp(time)}</span>
           </div>
         )}
         {source && (
@@ -335,11 +418,11 @@ export default function Home() {
               <button
                 disabled={busy}
                 onClick={() => {
-                  setView(view === 'source' ? 'result' : 'source');
+                  setView(view === "source" ? "result" : "source");
                   setPlaying(false);
                 }}
               >
-                {view === 'source' ? 'Show result' : 'Show original'}
+                {view === "source" ? "Show result" : "Show original"}
               </button>
             )}
           </div>
@@ -350,7 +433,7 @@ export default function Home() {
         <div className="timeline-row">
           <button
             className="play-control"
-            aria-label={playing ? 'Pause' : 'Play'}
+            aria-label={playing ? "Pause" : "Play"}
             disabled={!source || !!hasResult || busy}
             onClick={() => {
               if (!videoRef.current) return;
@@ -365,14 +448,14 @@ export default function Home() {
             <div className="timeline-meta">
               <span>
                 {source
-                  ? 'Choose the frame to freeze'
-                  : 'Add a clip to choose a frame'}
+                  ? "Choose the frame to freeze"
+                  : "Add a clip to choose a frame"}
               </span>
               <span>
                 {stamp(time)} <i>/ {stamp(duration)}</i>
               </span>
             </div>
-            <div className={`frames ${!source ? 'empty-frames' : ''}`}>
+            <div className={`frames ${!source ? "empty-frames" : ""}`}>
               {thumbs.length ? (
                 thumbs.map((src, i) => <img src={src} key={i} alt="" />)
               ) : (
@@ -429,7 +512,7 @@ export default function Home() {
               {PRESETS.map((p) => (
                 <label
                   key={p.id}
-                  className={`camera-option ${preset === p.id ? 'active' : ''}`}
+                  className={`camera-option ${preset === p.id ? "active" : ""}`}
                 >
                   <RadioGroupItem
                     value={p.id}
@@ -457,15 +540,15 @@ export default function Home() {
               </NativeSelect>
             </div>
             <span className="render-price">
-              5s · $
-              {
+              {preset === "orbit" ? 6 : 5}s · $
+              {(
                 (
-                  { '480P': '0.25', '768P': '0.40', '1080P': '0.80' } as Record<
+                  { "480P": 0.05, "768P": 0.08, "1080P": 0.16 } as Record<
                     string,
-                    string
+                    number
                   >
-                )[resolution]
-              }
+                )[resolution] * (preset === "orbit" ? 6 : 5)
+              ).toFixed(2)}
               <small>before launch discount</small>
             </span>
           </div>
@@ -476,7 +559,7 @@ export default function Home() {
                 disabled={busy}
                 onClick={() => void exportEdit()}
               >
-                {busy ? 'Assembling full video…' : 'Retry full video assembly'}
+                {busy ? busyLabel : "Retry full video assembly"}
               </button>
             ) : !hasResult ? (
               <button
@@ -490,11 +573,7 @@ export default function Home() {
                   <Pause size={18} />
                 )}
                 <span>
-                  {busy
-                    ? 'Generating…'
-                    : source
-                      ? 'Generate freeze'
-                      : 'Open video'}
+                  {busy ? busyLabel : source ? "Generate freeze" : "Open video"}
                 </span>
               </button>
             ) : exported ? (
@@ -517,13 +596,13 @@ export default function Home() {
                 ) : (
                   <Download size={18} />
                 )}
-                <span>{busy ? 'Assembling…' : 'Retry assembly'}</span>
+                <span>{busy ? busyLabel : "Retry assembly"}</span>
               </button>
             )}
             <span>
               {hasResult
-                ? 'Original → generated clip → original'
-                : 'Only the selected frame goes to fal'}
+                ? "Original → generated clip → original"
+                : "Only the selected frame goes to fal"}
             </span>
             {generated && exported && (
               <button
@@ -537,14 +616,14 @@ export default function Home() {
           </div>
         </div>
         <div
-          className={`status-line ${error ? 'has-error' : ''}`}
+          className={`status-line ${error ? "has-error" : ""}`}
           aria-live="polite"
         >
           {error ||
             phase ||
             (source
-              ? 'Scrub to a clear frame. Choose a camera move, then generate.'
-              : 'MP4, MOV or WebM · Up to 60 seconds · 150 MB max')}
+              ? "Scrub to a clear frame. Choose a camera move, then generate."
+              : "MP4, MOV or WebM · Up to 60 seconds · 150 MB max")}
           <a
             href="https://fal.ai/models/minimax/h3-max/multi-angle/image-to-video"
             target="_blank"
@@ -562,7 +641,7 @@ export default function Home() {
         aria-label="Choose a video"
         onChange={(e) => {
           void upload(e.target.files?.[0]);
-          e.target.value = '';
+          e.target.value = "";
         }}
       />
       <Dialog open={keyOpen} onOpenChange={setKeyOpen}>
@@ -604,7 +683,7 @@ export default function Home() {
             <button
               className="quiet-button"
               onClick={() => {
-                setKey('');
+                setKey("");
                 setKeyOpen(false);
               }}
             >
@@ -624,7 +703,7 @@ export default function Home() {
           </DialogDescription>
           <pre>
             {JSON.stringify(
-              makeInput('YOUR_EXTRACTED_FRAME', preset, resolution),
+              makeInput("YOUR_EXTRACTED_FRAME", preset, resolution),
               null,
               2,
             )}
@@ -635,7 +714,7 @@ export default function Home() {
               try {
                 await navigator.clipboard.writeText(
                   JSON.stringify(
-                    makeInput('YOUR_EXTRACTED_FRAME', preset, resolution),
+                    makeInput("YOUR_EXTRACTED_FRAME", preset, resolution),
                     null,
                     2,
                   ),
@@ -643,12 +722,12 @@ export default function Home() {
                 setCopied(true);
                 setTimeout(() => setCopied(false), 2000);
               } catch {
-                setError('Clipboard unavailable. Select and copy the recipe.');
+                setError("Clipboard unavailable. Select and copy the recipe.");
               }
             }}
           >
             <Code2 size={17} />
-            {copied ? 'Copied' : 'Copy input'}
+            {copied ? "Copied" : "Copy input"}
           </button>
           <a
             href="https://fal.ai/models/minimax/h3-max/multi-angle/image-to-video/api"
@@ -672,11 +751,11 @@ function CameraPath({ kind }: { kind: PresetId }) {
       <path
         className="path-motion"
         d={
-          kind === 'orbit'
-            ? 'M50 43a34 13 0 1 1 1 0'
-            : kind === 'rise'
-              ? 'M50 43Q88 43 77 18Q68 4 50 7'
-              : 'M50 43Q84 44 84 30Q82 20 67 19'
+          kind === "orbit"
+            ? "M50 43a34 13 0 1 1 1 0"
+            : kind === "rise"
+              ? "M50 43Q88 43 77 18Q68 4 50 7"
+              : "M50 43Q84 44 84 30Q82 20 67 19"
         }
       />
       <circle cx="50" cy="43" r="3" className="path-camera" />

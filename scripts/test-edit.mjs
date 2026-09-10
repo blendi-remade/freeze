@@ -35,7 +35,7 @@ run([
   '-f',
   'lavfi',
   '-i',
-  'testsrc2=size=160x90:rate=30:duration=5',
+  'testsrc2=size=176x90:rate=30:duration=5',
   '-c:v',
   'libx264',
   '-pix_fmt',
