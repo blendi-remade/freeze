@@ -1,3 +1,9 @@
+export function validateExportSpeed(speed: number) {
+  if (!Number.isFinite(speed) || speed < 1 || speed > 3)
+    throw new Error("Choose a final video speed between 1× and 3×.");
+  return speed;
+}
+
 export function buildEditPlan(
   width: number,
   height: number,
@@ -6,7 +12,9 @@ export function buildEditPlan(
   sourceDuration: number,
   sourceAudio: boolean,
   cameraAudio: boolean,
+  speed = 1,
 ) {
+  validateExportSpeed(speed);
   const normalize = `scale=${width}:${height},setsar=1,fps=30,format=yuv420p`;
   const normalizeCamera = normalize;
   const graph: string[] = [];
@@ -65,8 +73,23 @@ export function buildEditPlan(
       audios.push("[aafter]");
     }
   }
-  graph.push(`${segments.join("")}concat=n=${segments.length}:v=1:a=0[v]`);
-  if (hasAudio)
-    graph.push(`${audios.join("")}concat=n=${audios.length}:v=0:a=1[a]`);
+  // Retime the completed edit so all three segments and their transitions agree.
+  const videoSpeed =
+    speed === 1 ? "" : `,setpts=(PTS-STARTPTS)/${speed},fps=30`;
+  graph.push(
+    `${segments.join("")}concat=n=${segments.length}:v=1:a=0${videoSpeed}[v]`,
+  );
+  if (hasAudio) {
+    // Keep each atempo stage <= 2 to preserve pitch without skipping samples.
+    const tempo =
+      speed > 2 ? `atempo=2,atempo=${speed / 2}` : `atempo=${speed}`;
+    const audioSpeed =
+      speed === 1
+        ? ""
+        : `,${tempo},apad,atrim=duration=${(sourceDuration + cameraDuration) / speed},asetpts=N/SR/TB`;
+    graph.push(
+      `${audios.join("")}concat=n=${audios.length}:v=0:a=1${audioSpeed}[a]`,
+    );
+  }
   return graph.join(";");
 }

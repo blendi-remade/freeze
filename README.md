@@ -38,6 +38,7 @@ Open the local URL printed in the terminal. Alternatively, leave the key file un
 2. Scrub to a sharp frame at the moment you want to freeze.
 3. Choose a camera move and resolution, then select **Generate freeze**.
 4. The app generates the camera move and automatically assembles the complete video. Download the finished MP4.
+5. In the result view, choose **Final speed** from 1× to 3× in 0.25× steps. Changing speed rebuilds the full edit and updates both the preview and downloaded MP4, with audio kept in sync and pitch preserved. It reuses the existing camera generation without another model call.
 
 **Rebuild full video** reuses the existing generation without another model call. Keep the tab open until you download your result; projects are not saved across refreshes.
 

@@ -4,7 +4,7 @@ import { promisify } from "node:util";
 import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname, basename } from "node:path";
-import { buildEditPlan } from "../lib/edit-plan";
+import { buildEditPlan, validateExportSpeed } from "../lib/edit-plan";
 
 const exec = promisify(execFile);
 export function localExport(): Plugin {
@@ -60,6 +60,7 @@ export function localExport(): Plugin {
           const form = await request.formData();
           const source = form.get("source");
           const at = Number(form.get("freezeAt"));
+          const speed = validateExportSpeed(Number(form.get("speed") ?? 1));
           const cameraValue = form.get("cameraUrl");
           if (typeof cameraValue !== "string")
             throw new Error("Missing generated clip URL.");
@@ -139,6 +140,7 @@ export function localExport(): Plugin {
             duration,
             audio(original),
             audio(generated),
+            speed,
           );
           const args = [
             "-hide_banner",
@@ -176,7 +178,8 @@ export function localExport(): Plugin {
           const finished = await probe(output);
           if (
             Math.abs(
-              Number(finished.format.duration) - (duration + cameraDuration),
+              Number(finished.format.duration) -
+                (duration + cameraDuration) / speed,
             ) > 0.25
           )
             throw new Error(
