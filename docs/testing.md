@@ -30,7 +30,8 @@ Score entry and exit seams 1–5, where 5 is visually unobtrusive. Watch the ent
 - Key connection, refresh clears key, invalid key, empty balance, generation error.
 - Source/result toggle and repeated generation.
 - Local export with sound and without sound; each segment retains its audio when available.
-- Download MP4, check duration = full original duration + generated clip duration.
+- Change Final speed from 1× through 3×, then back to 1×. Check that rebuilding blocks downloads until the updated result is ready, and that a failed rebuild keeps the previous result and speed available.
+- Download MP4, check duration = (full original duration + generated clip duration) / selected speed. Check source and camera audio stay synchronized and retain their pitch, including at 3×. Verify both native and browser exports, including clips with missing audio.
 - Narrow mobile layout and keyboard navigation through presets, slider and dialogs.
 - Browser engine download and worker loading on the deployed URL.
 

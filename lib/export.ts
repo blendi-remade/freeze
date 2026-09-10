@@ -1,7 +1,7 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile } from "@ffmpeg/util";
 import { readVideo } from "./video";
-import { buildEditPlan } from "./edit-plan";
+import { buildEditPlan, validateExportSpeed } from "./edit-plan";
 
 // Local development assembles on this machine; hosted builds use browser WebAssembly.
 export async function assembleEdit(
@@ -9,7 +9,9 @@ export async function assembleEdit(
   cameraUrl: string,
   freezeAt: number,
   report: (message: string) => void,
+  speed = 1,
 ): Promise<Blob> {
+  validateExportSpeed(speed);
   // Local development uses the installed native encoder, avoiding browser worker issues.
   const local = await fetch("/api/local-config")
     .then(
@@ -23,6 +25,7 @@ export async function assembleEdit(
     data.set("source", file);
     data.set("cameraUrl", cameraUrl);
     data.set("freezeAt", String(freezeAt));
+    data.set("speed", String(speed));
     const response = await fetch("/api/local-assemble", {
       method: "POST",
       body: data,
@@ -136,6 +139,7 @@ export async function assembleEdit(
       sourceDuration,
       hasAudio,
       cameraAudio,
+      speed,
     );
     report("Assembling your MP4 locally. Keep this tab open.");
     ff.on("progress", ({ progress }) => {

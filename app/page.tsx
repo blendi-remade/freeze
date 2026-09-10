@@ -40,6 +40,7 @@ export default function Home() {
   const dragDepth = useRef(0);
   const [resultTime, setResultTime] = useState(0);
   const [resultDuration, setResultDuration] = useState(0);
+  const [exportSpeed, setExportSpeed] = useState(1);
   const [muted, setMuted] = useState(false);
   const objectUrl = useRef(""),
     resultUrl = useRef("");
@@ -116,6 +117,7 @@ export default function Home() {
       setThumbs(frames);
       setGenerated("");
       setExported("");
+      setExportSpeed(1);
       setView("source");
       setPlaying(false);
       video.removeAttribute("src");
@@ -208,7 +210,11 @@ export default function Home() {
       setActivity("idle");
     }
   }
-  async function exportEdit(cameraUrl = generated, selectedTime = freezeAt) {
+  async function exportEdit(
+    cameraUrl = generated,
+    selectedTime = freezeAt,
+    speed = exportSpeed,
+  ) {
     if (!file || !cameraUrl) return;
     setActivity("assembling");
     setError("");
@@ -219,12 +225,14 @@ export default function Home() {
         cameraUrl,
         selectedTime,
         setPhase,
+        speed,
       );
       URL.revokeObjectURL(resultUrl.current);
       resultUrl.current = URL.createObjectURL(output);
       setExported(resultUrl.current);
+      setExportSpeed(speed);
       setView("result");
-      setPhase("Your finished edit is ready.");
+      setPhase(`Your finished edit is ready at ${speed}× speed.`);
     } catch (e) {
       setView("source");
       setError(
@@ -539,6 +547,26 @@ export default function Home() {
                 <option value="1080P">1080p</option>
               </NativeSelect>
             </div>
+            <div className="quality-control">
+              <label htmlFor="export-speed">Final speed</label>
+              <NativeSelect
+                id="export-speed"
+                value={exportSpeed}
+                onChange={(e) => {
+                  const speed = Number(e.target.value);
+                  if (generated && exported)
+                    void exportEdit(generated, freezeAt, speed);
+                  else setExportSpeed(speed);
+                }}
+                disabled={!source || busy}
+              >
+                {[1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3].map((speed) => (
+                  <option key={speed} value={speed}>
+                    {speed}×
+                  </option>
+                ))}
+              </NativeSelect>
+            </div>
             <span className="render-price">
               {preset === "orbit" ? 6 : 5}s · $
               {(
@@ -553,7 +581,12 @@ export default function Home() {
             </span>
           </div>
           <div className="primary-actions">
-            {generated && !exported ? (
+            {busy ? (
+              <button className="generate-button" disabled>
+                <Loader2 size={18} className="spin" />
+                <span>{busyLabel}</span>
+              </button>
+            ) : generated && !exported ? (
               <button
                 className="generate-button"
                 disabled={busy}
