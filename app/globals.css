@@ -536,6 +536,7 @@ a:focus-visible {
 }
 .output-controls {
   display: flex;
+  flex-wrap: wrap;
   gap: 24px;
   align-items: center;
 }

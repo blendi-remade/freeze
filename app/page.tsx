@@ -535,45 +535,37 @@ export default function Home() {
           </div>
           <div className="output-controls">
             <div className="quality-control">
-              {hasResult ? (
-                <>
-                  <label htmlFor="export-speed">Final speed</label>
-                  <NativeSelect
-                    id="export-speed"
-                    value={exportSpeed}
-                    onChange={(e) =>
-                      void exportEdit(
-                        generated,
-                        freezeAt,
-                        Number(e.target.value),
-                      )
-                    }
-                    disabled={busy}
-                  >
-                    {[1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3].map(
-                      (speed) => (
-                        <option key={speed} value={speed}>
-                          {speed}×
-                        </option>
-                      ),
-                    )}
-                  </NativeSelect>
-                </>
-              ) : (
-                <>
-                  <label htmlFor="resolution">Quality</label>
-                  <NativeSelect
-                    id="resolution"
-                    value={resolution}
-                    onChange={(e) => setResolution(e.target.value)}
-                    disabled={busy}
-                  >
-                    <option value="480P">480p</option>
-                    <option value="768P">768p</option>
-                    <option value="1080P">1080p</option>
-                  </NativeSelect>
-                </>
-              )}
+              <label htmlFor="resolution">Quality</label>
+              <NativeSelect
+                id="resolution"
+                value={resolution}
+                onChange={(e) => setResolution(e.target.value)}
+                disabled={busy}
+              >
+                <option value="480P">480p</option>
+                <option value="768P">768p</option>
+                <option value="1080P">1080p</option>
+              </NativeSelect>
+            </div>
+            <div className="quality-control">
+              <label htmlFor="export-speed">Final speed</label>
+              <NativeSelect
+                id="export-speed"
+                value={exportSpeed}
+                onChange={(e) => {
+                  const speed = Number(e.target.value);
+                  if (generated && exported)
+                    void exportEdit(generated, freezeAt, speed);
+                  else setExportSpeed(speed);
+                }}
+                disabled={!source || busy}
+              >
+                {[1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3].map((speed) => (
+                  <option key={speed} value={speed}>
+                    {speed}×
+                  </option>
+                ))}
+              </NativeSelect>
             </div>
             <span className="render-price">
               {preset === "orbit" ? 6 : 5}s · $
