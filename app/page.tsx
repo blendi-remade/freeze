@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { NativeSelect } from "@/components/ui/native-select";
+import { Checkbox } from "@/components/ui/checkbox";
+import type { MusicTask } from "@/lib/music";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Dialog,
@@ -41,6 +43,9 @@ export default function Home() {
   const [resultTime, setResultTime] = useState(0);
   const [resultDuration, setResultDuration] = useState(0);
   const [muted, setMuted] = useState(false);
+  const [includeMusic, setIncludeMusic] = useState(false);
+  const [musicReady, setMusicReady] = useState(false);
+  const musicTask = useRef<MusicTask | null>(null);
   const objectUrl = useRef(""),
     resultUrl = useRef("");
   const [file, setFile] = useState<File | null>(null),
@@ -65,15 +70,17 @@ export default function Home() {
   const [drag, setDrag] = useState(false),
     [playing, setPlaying] = useState(false);
   const [activity, setActivity] = useState<
-    "idle" | "reading" | "generating" | "assembling"
+    "idle" | "reading" | "generating" | "assembling" | "music"
   >("idle");
   const busy = activity !== "idle";
   const busyLabel =
-    activity === "reading"
-      ? "Preparing video…"
-      : activity === "assembling"
-        ? "Assembling video…"
-        : "Generating…";
+    activity === "music"
+      ? "Adding music…"
+      : activity === "reading"
+        ? "Preparing video…"
+        : activity === "assembling"
+          ? "Assembling video…"
+          : "Generating…";
   const [phase, setPhase] = useState(""),
     [error, setError] = useState(""),
     [generated, setGenerated] = useState(""),
@@ -116,6 +123,8 @@ export default function Home() {
       setThumbs(frames);
       setGenerated("");
       setExported("");
+      musicTask.current = null;
+      setMusicReady(false);
       setView("source");
       setPlaying(false);
       video.removeAttribute("src");
@@ -153,6 +162,8 @@ export default function Home() {
     setError("");
     setGenerated("");
     setExported("");
+    musicTask.current = null;
+    setMusicReady(false);
     setPhase("Capturing this exact moment");
     videoRef.current.pause();
     setPlaying(false);
@@ -208,6 +219,52 @@ export default function Home() {
       setActivity("idle");
     }
   }
+  function showOutput(output: Blob) {
+    URL.revokeObjectURL(resultUrl.current);
+    resultUrl.current = URL.createObjectURL(output);
+    setExported(resultUrl.current);
+    setView("result");
+  }
+  async function addMusic(task: MusicTask) {
+    setActivity("music");
+    setError("");
+    videoRef.current?.pause();
+    setPlaying(false);
+    try {
+      if (!task.output) {
+        const { generateMusic } = await import("@/lib/music");
+        const audioUrl = await generateMusic(task, key, setPhase);
+        const { layerMusic } = await import("@/lib/music-export");
+        task.output = await layerMusic(task.video, audioUrl, setPhase);
+      }
+      showOutput(task.output);
+      setMusicReady(true);
+      setPhase("Your finished edit with music is ready.");
+    } catch (error) {
+      setError(
+        `Music could not be added. ${error instanceof Error ? error.message : "Try again."} Your video without music is still available.`,
+      );
+    } finally {
+      setActivity("idle");
+    }
+  }
+  function changeMusic(enabled: boolean) {
+    if (busy) return;
+    const task = musicTask.current;
+    if (enabled && task && !key && !serverKey) {
+      setKeyOpen(true);
+      return;
+    }
+    setIncludeMusic(enabled);
+    setError("");
+    if (!task) return;
+    if (enabled) void addMusic(task);
+    else {
+      showOutput(task.video);
+      setMusicReady(false);
+      setPhase("Your finished edit without music is ready.");
+    }
+  }
   async function exportEdit(cameraUrl = generated, selectedTime = freezeAt) {
     if (!file || !cameraUrl) return;
     setActivity("assembling");
@@ -220,11 +277,12 @@ export default function Home() {
         selectedTime,
         setPhase,
       );
-      URL.revokeObjectURL(resultUrl.current);
-      resultUrl.current = URL.createObjectURL(output);
-      setExported(resultUrl.current);
-      setView("result");
+      const task: MusicTask = { video: output };
+      musicTask.current = task;
+      setMusicReady(false);
+      showOutput(output);
       setPhase("Your finished edit is ready.");
+      if (includeMusic) await addMusic(task);
     } catch (e) {
       setView("source");
       setError(
@@ -553,7 +611,35 @@ export default function Home() {
             </span>
           </div>
           <div className="primary-actions">
-            {generated && !exported ? (
+            <div className="music-option">
+              <label htmlFor="add-music">
+                <Checkbox
+                  id="add-music"
+                  checked={includeMusic}
+                  onCheckedChange={changeMusic}
+                  disabled={busy}
+                  aria-describedby="music-details"
+                />
+                Add music
+              </label>
+              <small id="music-details">
+                Sends finished video to fal · $0.009/s
+              </small>
+              {includeMusic && musicTask.current && !musicReady && !busy && (
+                <button
+                  className="quiet-button"
+                  onClick={() => void addMusic(musicTask.current!)}
+                >
+                  Retry music
+                </button>
+              )}
+            </div>
+            {busy ? (
+              <button className="generate-button" disabled>
+                <Loader2 size={18} className="spin" />
+                <span>{busyLabel}</span>
+              </button>
+            ) : generated && !exported ? (
               <button
                 className="generate-button"
                 disabled={busy}
@@ -602,7 +688,9 @@ export default function Home() {
             <span>
               {hasResult
                 ? "Original → generated clip → original"
-                : "Only the selected frame goes to fal"}
+                : includeMusic
+                  ? "Finished video also goes to fal for music"
+                  : "Only the selected frame goes to fal"}
             </span>
             {generated && exported && (
               <button

@@ -38,6 +38,9 @@ export async function falFetch(url: string, key: string, init?: RequestInit) {
     status?: string;
     queue_position?: number;
     video?: { url: string };
+    audio?: { url: string };
+    file_url?: string;
+    upload_url?: string;
   };
   if (!response.ok) {
     const detail =
