@@ -698,8 +698,8 @@ export default function Home() {
           <DialogDescription>
             The selected frame becomes the first frame of an H3 Max camera move.
             The result contains your original footage up to the selected frame,
-            followed by the full generated clip and the remaining original
-            footage.
+            followed by the generated camera move with its last half-second
+            trimmed, and the remaining original footage.
           </DialogDescription>
           <pre>
             {JSON.stringify(
