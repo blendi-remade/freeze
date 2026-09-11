@@ -53,7 +53,16 @@ function capture(video: HTMLVideoElement, width: number) {
 }
 export async function extractFrame(video: HTMLVideoElement, time: number) {
   await seekVideo(video, time);
-  return capture(video, 1920);
+  // Leave room for the recipe JSON below Vercel's 4.5 MB request limit.
+  let width = Math.min(1920, video.videoWidth);
+  let frame = capture(video, width);
+  while (frame.length > 3_800_000 && width > 320) {
+    width = Math.max(320, Math.floor(width * 0.75));
+    frame = capture(video, width);
+  }
+  if (frame.length > 3_800_000)
+    throw new Error('This frame is too large. Try a smaller source video.');
+  return frame;
 }
 export async function makeThumbnails(video: HTMLVideoElement, count: number) {
   const frames: string[] = [];

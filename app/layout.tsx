@@ -20,7 +20,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'Freeze: video editor',
   description:
-    'Create a camera move from a frame in your video, appended to the original footage up to that frame.',
+    'Freeze a moment, move the camera around it, then resume the original video.',
 };
 
 export default function RootLayout({

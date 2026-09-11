@@ -1,0 +1,10 @@
+.env*
+.dev.vars*
+.openai
+.wrangler
+.vinext
+outputs
+work
+test-results
+docs/images
+*.tsbuildinfo

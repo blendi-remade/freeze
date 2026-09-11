@@ -1,6 +1,6 @@
 # Real-footage evaluation
 
-Start with short SDR H.264 clips, a relatively stationary phone, and a sharp frame at the apex of the action. Use 768P and Side Arc for the first pass. The exporter currently produces 30fps MP4 with the original aspect ratio and a 1280px maximum long edge.
+Start with short SDR H.264 clips, a relatively stationary phone, and a sharp frame at the apex of the action. Use 768P and Arc Return for the first pass. The exporter produces 30fps MP4 at the generated clip's dimensions, with a direct cut back to the source and no exit blend.
 
 ## First six clips
 
@@ -13,7 +13,7 @@ Start with short SDR H.264 clips, a relatively stationary phone, and a sharp fra
 | Basketball toss      | Ball shape, hands, background geometry            |
 | Hair flip            | Thin structures, subject motion leakage           |
 
-Generate once with Side Arc; retry only when necessary. Check the fal dashboard if a request times out. Then compare Hero Rise and Full Orbit on the three strongest clips. Record each attempt so the successful examples do not hide retry costs.
+Generate once with Arc Return; retry only when necessary. Check the fal dashboard if a request times out. Then compare Rise Return, Full Orbit and Orbit Left on the three strongest clips. Inspect both the camera pose and subject/scene consistency at the final frame. Record each attempt so the successful examples do not hide retry costs.
 
 ## Record for every result
 
@@ -30,7 +30,7 @@ Score entry and exit seams 1–5, where 5 is visually unobtrusive. Watch the ent
 - Key connection, refresh clears key, invalid key, empty balance, generation error.
 - Source/result toggle and repeated generation.
 - Local export with sound and without sound; each segment retains its audio when available.
-- Download MP4, check duration = full original duration + generated clip duration.
+- Download MP4, check duration = original duration + (generated duration − optional 1-second trim) / AI clip speed.
 - Narrow mobile layout and keyboard navigation through presets, slider and dialogs.
 - Browser engine download and worker loading on the deployed URL.
 

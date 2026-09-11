@@ -2,10 +2,10 @@ import { falFetch, getKey, json, QUEUE } from "@/lib/fal-server";
 export async function POST(request: Request) {
   try {
     const key = getKey(request);
-    if (Number(request.headers.get("content-length") || 0) > 8000000)
+    if (Number(request.headers.get("content-length") || 0) > 4000000)
       return json({ error: "The selected frame is too large." }, 413);
     const raw = await request.text();
-    if (raw.length > 8000000)
+    if (raw.length > 4000000)
       return json({ error: "The selected frame is too large." }, 413);
     const input = JSON.parse(raw);
     if (

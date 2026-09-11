@@ -11,7 +11,9 @@ export async function GET(request: Request) {
     )
       return json({ error: 'Only fal media URLs are supported.' }, 400);
     const response = await fetch(url, {
-      redirect: 'error',
+      // Workers supports manual/follow only. Non-2xx responses below reject
+      // redirects without fetching a destination outside the fal allowlist.
+      redirect: 'manual',
       signal: AbortSignal.timeout(60000),
     });
     if (!response.ok)
@@ -23,7 +25,8 @@ export async function GET(request: Request) {
         'X-Content-Type-Options': 'nosniff',
       },
     });
-  } catch {
+  } catch (error) {
+    console.error('[media] Camera download failed:', error);
     return json({ error: 'Could not retrieve this camera move.' }, 400);
   }
 }

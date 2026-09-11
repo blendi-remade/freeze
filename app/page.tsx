@@ -1,11 +1,12 @@
-"use client";
+'use client';
 // Blob thumbnails stay local; user-uploaded clips do not include caption files.
 /* oxlint-disable next/no-img-element, jsx-a11y/media-has-caption */
-import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import Link from 'next/link';
+import { useEffect, useRef, useState } from 'react';
 import {
   Check,
   ChevronLeft,
+  ChevronDown,
   ChevronRight,
   Code2,
   Download,
@@ -17,23 +18,23 @@ import {
   Play,
   Plus,
   Upload,
-} from "lucide-react";
-import { Slider } from "@/components/ui/slider";
-import { NativeSelect } from "@/components/ui/native-select";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+} from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Select as CameraSelect } from '@base-ui/react/select';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { PRESETS, type PresetId, makeInput } from "@/lib/recipe";
-import { extractFrame, makeThumbnails, readVideo } from "@/lib/video";
+} from '@/components/ui/dialog';
+import { PRESETS, type PresetId, makeInput, getPreset } from '@/lib/recipe';
+import { extractFrame, makeThumbnails, readVideo } from '@/lib/video';
 
 const stamp = (t: number) =>
   `${Math.floor(t / 60)
     .toString()
-    .padStart(2, "0")}:${(t % 60).toFixed(2).padStart(5, "0")}`;
+    .padStart(2, '0')}:${(t % 60).toFixed(2).padStart(5, '0')}`;
 export default function Home() {
   const inputRef = useRef<HTMLInputElement>(null),
     videoRef = useRef<HTMLVideoElement>(null);
@@ -41,45 +42,49 @@ export default function Home() {
   const [resultTime, setResultTime] = useState(0);
   const [resultDuration, setResultDuration] = useState(0);
   const [muted, setMuted] = useState(false);
-  const objectUrl = useRef(""),
-    resultUrl = useRef("");
+  const objectUrl = useRef(''),
+    resultUrl = useRef('');
   const [file, setFile] = useState<File | null>(null),
-    [source, setSource] = useState("");
+    [source, setSource] = useState('');
   const [duration, setDuration] = useState(0),
     [time, setTime] = useState(0),
     [thumbs, setThumbs] = useState<string[]>([]);
-  const [preset, setPreset] = useState<PresetId>("orbit"),
-    [resolution, setResolution] = useState("768P");
+  const [preset, setPreset] = useState<PresetId>('orbit'),
+    [resolution, setResolution] = useState('768P');
+  const [cameraSpeed, setCameraSpeed] = useState(1);
+  const [generatedSpeed, setGeneratedSpeed] = useState(1);
+  const [trimCameraEnd, setTrimCameraEnd] = useState(false);
+  const [generatedTrimEnd, setGeneratedTrimEnd] = useState(false);
   const [serverKey, setServerKey] = useState(false);
   useEffect(() => {
-    void fetch("/api/config")
+    void fetch('/api/config')
       .then((r) => r.json())
       .then((data) =>
         setServerKey(Boolean((data as { configured?: boolean }).configured)),
       )
       .catch(() => {});
   }, []);
-  const [key, setKey] = useState(""),
+  const [key, setKey] = useState(''),
     [keyOpen, setKeyOpen] = useState(false),
     [recipeOpen, setRecipeOpen] = useState(false);
   const [drag, setDrag] = useState(false),
     [playing, setPlaying] = useState(false);
   const [activity, setActivity] = useState<
-    "idle" | "reading" | "generating" | "assembling"
-  >("idle");
-  const busy = activity !== "idle";
+    'idle' | 'reading' | 'generating' | 'assembling'
+  >('idle');
+  const busy = activity !== 'idle';
   const busyLabel =
-    activity === "reading"
-      ? "Preparing video…"
-      : activity === "assembling"
-        ? "Assembling video…"
-        : "Generating…";
-  const [phase, setPhase] = useState(""),
-    [error, setError] = useState(""),
-    [generated, setGenerated] = useState(""),
-    [exported, setExported] = useState("");
+    activity === 'reading'
+      ? 'Preparing video…'
+      : activity === 'assembling'
+        ? 'Assembling video…'
+        : 'Generating…';
+  const [phase, setPhase] = useState(''),
+    [error, setError] = useState(''),
+    [generated, setGenerated] = useState(''),
+    [exported, setExported] = useState('');
   const [freezeAt, setFreezeAt] = useState(0);
-  const [view, setView] = useState<"source" | "result">("source"),
+  const [view, setView] = useState<'source' | 'result'>('source'),
     [copied, setCopied] = useState(false);
   useEffect(
     () => () => {
@@ -90,13 +95,13 @@ export default function Home() {
   );
   async function upload(next?: File) {
     if (!next || busy) return;
-    setError("");
-    if (!next.type.startsWith("video/"))
-      return setError("Choose a video file, such as MP4, MOV, or WebM.");
+    setError('');
+    if (!next.type.startsWith('video/'))
+      return setError('Choose a video file, such as MP4, MOV, or WebM.');
     if (next.size > 150 * 1024 * 1024)
-      return setError("Choose a video smaller than 150 MB.");
-    setActivity("reading");
-    setPhase("Reading your clip");
+      return setError('Choose a video smaller than 150 MB.');
+    setActivity('reading');
+    setPhase('Reading your clip');
     const url = URL.createObjectURL(next);
     try {
       const video = await readVideo(url);
@@ -105,7 +110,7 @@ export default function Home() {
         video.duration < 1 ||
         video.duration > 60
       )
-        throw new Error("Choose a clip between 1 and 60 seconds long.");
+        throw new Error('Choose a clip between 1 and 60 seconds long.');
       const frames = await makeThumbnails(video, 10);
       URL.revokeObjectURL(objectUrl.current);
       objectUrl.current = url;
@@ -114,27 +119,27 @@ export default function Home() {
       setDuration(video.duration);
       setTime(video.duration / 2);
       setThumbs(frames);
-      setGenerated("");
-      setExported("");
-      setView("source");
+      setGenerated('');
+      setExported('');
+      setView('source');
       setPlaying(false);
-      video.removeAttribute("src");
+      video.removeAttribute('src');
       video.load();
     } catch (e) {
       URL.revokeObjectURL(url);
       setError(
         e instanceof Error
           ? e.message
-          : "This video could not be opened. Try an MP4.",
+          : 'This video could not be opened. Try an MP4.',
       );
     } finally {
-      setActivity("idle");
-      setPhase("");
+      setActivity('idle');
+      setPhase('');
     }
   }
   function scrub(value: number) {
     setTime(value);
-    if (videoRef.current && view === "source") {
+    if (videoRef.current && view === 'source') {
       videoRef.current.pause();
       videoRef.current.currentTime = value;
       setPlaying(false);
@@ -149,20 +154,20 @@ export default function Home() {
       setKeyOpen(true);
       return;
     }
-    setActivity("generating");
-    setError("");
-    setGenerated("");
-    setExported("");
-    setPhase("Capturing this exact moment");
+    setActivity('generating');
+    setError('');
+    setGenerated('');
+    setExported('');
+    setPhase('Capturing this exact moment');
     videoRef.current.pause();
     setPlaying(false);
     try {
       const frame = await extractFrame(videoRef.current, time),
         frozenTime = time;
-      setPhase("Sending your frame to H3 Max");
-      const response = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Fal-Key": key },
+      setPhase('Sending your frame to H3 Max');
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Fal-Key': key },
         body: JSON.stringify(makeInput(frame, preset, resolution)),
       });
       const job = (await response.json()) as {
@@ -170,13 +175,13 @@ export default function Home() {
         request_id: string;
       };
       if (!response.ok)
-        throw new Error(job.error || "Could not start generation.");
+        throw new Error(job.error || 'Could not start generation.');
       const started = Date.now();
       while (Date.now() - started < 600000) {
         await new Promise((r) => setTimeout(r, 2000));
         const response = await fetch(
           `/api/jobs/${encodeURIComponent(job.request_id)}`,
-          { headers: { "X-Fal-Key": key } },
+          { headers: { 'X-Fal-Key': key } },
         );
         const state = (await response.json()) as {
           error?: string;
@@ -184,67 +189,77 @@ export default function Home() {
           video?: { url: string };
         };
         if (!response.ok)
-          throw new Error(state.error || "Could not check generation.");
+          throw new Error(state.error || 'Could not check generation.');
         if (state.video?.url) {
           setGenerated(state.video.url);
+          setGeneratedSpeed(cameraSpeed);
+          setGeneratedTrimEnd(trimCameraEnd);
           setFreezeAt(frozenTime);
-          setExported("");
-          await exportEdit(state.video.url, frozenTime);
+          setExported('');
+          await exportEdit(state.video.url, frozenTime, cameraSpeed, trimCameraEnd);
           return;
         }
         setPhase(
-          state.status === "IN_QUEUE"
-            ? "Queued on fal…"
-            : "Generating camera move…",
+          state.status === 'IN_QUEUE'
+            ? 'Queued on fal…'
+            : 'Generating camera move…',
         );
       }
       throw new Error(
-        "This request is taking longer than expected. Check your fal dashboard before retrying.",
+        'This request is taking longer than expected. Check your fal dashboard before retrying.',
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Generation failed.");
-      setPhase("");
+      setError(e instanceof Error ? e.message : 'Generation failed.');
+      setPhase('');
     } finally {
-      setActivity("idle");
+      setActivity('idle');
     }
   }
-  async function exportEdit(cameraUrl = generated, selectedTime = freezeAt) {
+  async function exportEdit(
+    cameraUrl = generated,
+    selectedTime = freezeAt,
+    selectedSpeed = generatedSpeed,
+    selectedTrimEnd = generatedTrimEnd,
+  ) {
     if (!file || !cameraUrl) return;
-    setActivity("assembling");
-    setError("");
+    setActivity('assembling');
+    setError('');
     try {
-      const { assembleEdit } = await import("@/lib/export");
+      const { assembleEdit } = await import('@/lib/export');
       const output = await assembleEdit(
         file,
         cameraUrl,
         selectedTime,
         setPhase,
+        selectedSpeed,
+        selectedTrimEnd,
       );
       URL.revokeObjectURL(resultUrl.current);
       resultUrl.current = URL.createObjectURL(output);
       setExported(resultUrl.current);
-      setView("result");
-      setPhase("Your finished edit is ready.");
+      setView('result');
+      setPhase('Your finished edit is ready.');
     } catch (e) {
-      setView("source");
+      setView('source');
       setError(
         e instanceof Error
           ? e.message
-          : "Export failed. You can still download the camera move.",
+          : 'Export failed. You can still download the camera move.',
       );
     } finally {
-      setActivity("idle");
+      setActivity('idle');
     }
   }
-  const hasResult = view === "result" && exported;
+  const hasResult = view === 'result' && exported;
+  const selectedPreset = getPreset(preset);
   return (
-    <main className={`workspace ${source ? "has-source" : ""}`}>
+    <main className={`workspace ${source ? 'has-source' : ''}`}>
       <header className="app-header">
         <Link className="app-name" href="/" aria-label="Freeze home">
           <Pause size={18} strokeWidth={3} />
           freeze
         </Link>
-        <span className="file-name">{file?.name || "Untitled clip"}</span>
+        <span className="file-name">{file?.name || 'Untitled clip'}</span>
         <div className="header-tools">
           <button
             className="quiet-button"
@@ -261,28 +276,28 @@ export default function Home() {
             </span>
           ) : (
             <button
-              className={`account-button ${key ? "is-connected" : ""}`}
+              className={`account-button ${key ? 'is-connected' : ''}`}
               onClick={() => setKeyOpen(true)}
             >
               <span className="connection-dot" />
-              {key ? "fal connected" : "Connect fal"}
+              {key ? 'fal connected' : 'Connect fal'}
             </button>
           )}
         </div>
       </header>
 
       <div
-        className={`stage ${drag ? "is-dragging" : ""}`}
+        className={`stage ${drag ? 'is-dragging' : ''}`}
         aria-label="Video preview"
         onDragEnter={(e) => {
           e.preventDefault();
-          if (busy || !e.dataTransfer.types.includes("Files")) return;
+          if (busy || !e.dataTransfer.types.includes('Files')) return;
           dragDepth.current += 1;
           setDrag(true);
         }}
         onDragOver={(e) => {
           e.preventDefault();
-          e.dataTransfer.dropEffect = busy ? "none" : "copy";
+          e.dataTransfer.dropEffect = busy ? 'none' : 'copy';
         }}
         onDragLeave={(e) => {
           e.preventDefault();
@@ -350,7 +365,7 @@ export default function Home() {
             aria-label="Result playback controls"
           >
             <button
-              aria-label={playing ? "Pause result" : "Play result"}
+              aria-label={playing ? 'Pause result' : 'Play result'}
               onClick={() => {
                 const video = videoRef.current;
                 if (!video) return;
@@ -376,7 +391,7 @@ export default function Home() {
             />
             <span>{stamp(resultDuration)}</span>
             <button
-              aria-label={muted ? "Unmute result" : "Mute result"}
+              aria-label={muted ? 'Unmute result' : 'Mute result'}
               onClick={() => setMuted(!muted)}
             >
               {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
@@ -402,10 +417,10 @@ export default function Home() {
             <span className="stage-dot" />
             {hasResult
               ? exported
-                ? "Finished edit"
-                : "Generated camera move"
-              : "Original"}
-            <span>{hasResult ? "" : stamp(time)}</span>
+                ? 'Finished edit'
+                : 'Generated camera move'
+              : 'Original'}
+            <span>{hasResult ? '' : stamp(time)}</span>
           </div>
         )}
         {source && (
@@ -418,11 +433,11 @@ export default function Home() {
               <button
                 disabled={busy}
                 onClick={() => {
-                  setView(view === "source" ? "result" : "source");
+                  setView(view === 'source' ? 'result' : 'source');
                   setPlaying(false);
                 }}
               >
-                {view === "source" ? "Show result" : "Show original"}
+                {view === 'source' ? 'Show result' : 'Show original'}
               </button>
             )}
           </div>
@@ -433,7 +448,7 @@ export default function Home() {
         <div className="timeline-row">
           <button
             className="play-control"
-            aria-label={playing ? "Pause" : "Play"}
+            aria-label={playing ? 'Pause' : 'Play'}
             disabled={!source || !!hasResult || busy}
             onClick={() => {
               if (!videoRef.current) return;
@@ -448,14 +463,14 @@ export default function Home() {
             <div className="timeline-meta">
               <span>
                 {source
-                  ? "Choose the frame to freeze"
-                  : "Add a clip to choose a frame"}
+                  ? 'Choose the frame to freeze'
+                  : 'Add a clip to choose a frame'}
               </span>
               <span>
                 {stamp(time)} <i>/ {stamp(duration)}</i>
               </span>
             </div>
-            <div className={`frames ${!source ? "empty-frames" : ""}`}>
+            <div className={`frames ${!source ? 'empty-frames' : ''}`}>
               {thumbs.length ? (
                 thumbs.map((src, i) => <img src={src} key={i} alt="" />)
               ) : (
@@ -501,29 +516,32 @@ export default function Home() {
 
         <div className="control-row">
           <div className="camera-controls">
-            <div className="control-label">Camera move</div>
-            <RadioGroup
-              className="camera-options"
-              aria-label="Camera move"
+            <div className="control-label" id="camera-move-label">Camera move</div>
+            <CameraSelect.Root
               value={preset}
-              onValueChange={(v) => setPreset(v as PresetId)}
+              onValueChange={(v) => { if (v) setPreset(v); }}
               disabled={busy}
             >
-              {PRESETS.map((p) => (
-                <label
-                  key={p.id}
-                  className={`camera-option ${preset === p.id ? "active" : ""}`}
-                >
-                  <RadioGroupItem
-                    value={p.id}
-                    aria-label={p.name}
-                    className="camera-radio"
-                  />
-                  <CameraPath kind={p.id} />
-                  <span>{p.name}</span>
-                </label>
-              ))}
-            </RadioGroup>
+              <CameraSelect.Trigger className="camera-select-trigger" aria-label={`Camera move: ${selectedPreset.name}`}>
+                <PresetSummary preset={selectedPreset} />
+                <CameraSelect.Icon><ChevronDown size={18} /></CameraSelect.Icon>
+              </CameraSelect.Trigger>
+              <CameraSelect.Portal>
+                <CameraSelect.Positioner side="top" align="start" sideOffset={8} alignItemWithTrigger={false} className="camera-select-positioner">
+                  <CameraSelect.Popup className="camera-select-popup">
+                    <div className="camera-select-heading">Camera moves <span>{PRESETS.length} presets</span></div>
+                    <CameraSelect.List className="camera-select-list" aria-label="Camera moves">
+                      {PRESETS.map((p) => (
+                        <CameraSelect.Item key={p.id} value={p.id} label={p.name} className="camera-select-option">
+                          <CameraSelect.ItemText><PresetSummary preset={p} /></CameraSelect.ItemText>
+                          <CameraSelect.ItemIndicator className="camera-select-check"><Check size={17} /></CameraSelect.ItemIndicator>
+                        </CameraSelect.Item>
+                      ))}
+                    </CameraSelect.List>
+                  </CameraSelect.Popup>
+                </CameraSelect.Positioner>
+              </CameraSelect.Portal>
+            </CameraSelect.Root>
           </div>
           <div className="output-controls">
             <div className="quality-control">
@@ -539,15 +557,43 @@ export default function Home() {
                 <option value="1080P">1080p</option>
               </NativeSelect>
             </div>
+            <div className="quality-control">
+              <label htmlFor="camera-speed">AI clip speed</label>
+              <NativeSelect
+                id="camera-speed"
+                value={cameraSpeed}
+                onChange={(e) => setCameraSpeed(Number(e.target.value))}
+                disabled={busy}
+              >
+                {[1, 1.25, 1.5, 1.75, 2].map((speed) => (
+                  <option key={speed} value={speed}>
+                    {speed}×
+                  </option>
+                ))}
+              </NativeSelect>
+            </div>
+            <div className="quality-control">
+              <label htmlFor="camera-trim">AI clip ending</label>
+              <NativeSelect
+                id="camera-trim"
+                value={trimCameraEnd ? 'trim' : 'full'}
+                onChange={(e) => setTrimCameraEnd(e.target.value === 'trim')}
+                disabled={busy}
+                title="Remove the last second of the AI clip before applying speed"
+              >
+                <option value="full">Keep full clip</option>
+                <option value="trim">Trim last 1s</option>
+              </NativeSelect>
+            </div>
             <span className="render-price">
-              {preset === "orbit" ? 6 : 5}s · $
+              {selectedPreset.duration}s · $
               {(
                 (
-                  { "480P": 0.05, "768P": 0.08, "1080P": 0.16 } as Record<
+                  { '480P': 0.05, '768P': 0.08, '1080P': 0.16 } as Record<
                     string,
                     number
                   >
-                )[resolution] * (preset === "orbit" ? 6 : 5)
+                )[resolution] * selectedPreset.duration
               ).toFixed(2)}
               <small>before launch discount</small>
             </span>
@@ -559,7 +605,7 @@ export default function Home() {
                 disabled={busy}
                 onClick={() => void exportEdit()}
               >
-                {busy ? busyLabel : "Retry full video assembly"}
+                {busy ? busyLabel : 'Retry full video assembly'}
               </button>
             ) : !hasResult ? (
               <button
@@ -573,7 +619,7 @@ export default function Home() {
                   <Pause size={18} />
                 )}
                 <span>
-                  {busy ? busyLabel : source ? "Generate freeze" : "Open video"}
+                  {busy ? busyLabel : source ? 'Generate freeze' : 'Open video'}
                 </span>
               </button>
             ) : exported ? (
@@ -596,13 +642,13 @@ export default function Home() {
                 ) : (
                   <Download size={18} />
                 )}
-                <span>{busy ? busyLabel : "Retry assembly"}</span>
+                <span>{busy ? busyLabel : 'Retry assembly'}</span>
               </button>
             )}
             <span>
               {hasResult
-                ? "Original → generated clip → original"
-                : "Only the selected frame goes to fal"}
+                ? 'Original → generated clip → original'
+                : 'Only the selected frame goes to fal'}
             </span>
             {generated && exported && (
               <button
@@ -616,14 +662,14 @@ export default function Home() {
           </div>
         </div>
         <div
-          className={`status-line ${error ? "has-error" : ""}`}
+          className={`status-line ${error ? 'has-error' : ''}`}
           aria-live="polite"
         >
           {error ||
             phase ||
             (source
-              ? "Scrub to a clear frame. Choose a camera move, then generate."
-              : "MP4, MOV or WebM · Up to 60 seconds · 150 MB max")}
+              ? 'Scrub to a clear frame. Choose a camera move, then generate.'
+              : 'MP4, MOV or WebM · Up to 60 seconds · 150 MB max')}
           <a
             href="https://fal.ai/models/minimax/h3-max/multi-angle/image-to-video"
             target="_blank"
@@ -641,7 +687,7 @@ export default function Home() {
         aria-label="Choose a video"
         onChange={(e) => {
           void upload(e.target.files?.[0]);
-          e.target.value = "";
+          e.target.value = '';
         }}
       />
       <Dialog open={keyOpen} onOpenChange={setKeyOpen}>
@@ -683,7 +729,7 @@ export default function Home() {
             <button
               className="quiet-button"
               onClick={() => {
-                setKey("");
+                setKey('');
                 setKeyOpen(false);
               }}
             >
@@ -703,7 +749,7 @@ export default function Home() {
           </DialogDescription>
           <pre>
             {JSON.stringify(
-              makeInput("YOUR_EXTRACTED_FRAME", preset, resolution),
+              makeInput('YOUR_EXTRACTED_FRAME', preset, resolution),
               null,
               2,
             )}
@@ -714,7 +760,7 @@ export default function Home() {
               try {
                 await navigator.clipboard.writeText(
                   JSON.stringify(
-                    makeInput("YOUR_EXTRACTED_FRAME", preset, resolution),
+                    makeInput('YOUR_EXTRACTED_FRAME', preset, resolution),
                     null,
                     2,
                   ),
@@ -722,12 +768,12 @@ export default function Home() {
                 setCopied(true);
                 setTimeout(() => setCopied(false), 2000);
               } catch {
-                setError("Clipboard unavailable. Select and copy the recipe.");
+                setError('Clipboard unavailable. Select and copy the recipe.');
               }
             }}
           >
             <Code2 size={17} />
-            {copied ? "Copied" : "Copy input"}
+            {copied ? 'Copied' : 'Copy input'}
           </button>
           <a
             href="https://fal.ai/models/minimax/h3-max/multi-angle/image-to-video/api"
@@ -742,22 +788,45 @@ export default function Home() {
   );
 }
 
+function PresetSummary({ preset }: { preset: (typeof PRESETS)[number] }) {
+  return (
+    <span className="preset-summary">
+      <CameraPath kind={preset.id} />
+      <span className="preset-copy">
+        <span className="preset-name">{preset.name}</span>
+        <span className="preset-description">{preset.description}</span>
+        <span className="preset-return">{preset.returnsToStart ? 'Returns to start' : 'Ends at new angle'}</span>
+      </span>
+    </span>
+  );
+}
+
 function CameraPath({ kind }: { kind: PresetId }) {
+  const paths: Record<PresetId, string> = {
+    orbit: 'M50 43a34 13 0 1 1 1 0l-5-4m5 4-5 3',
+    'orbit-left': 'M50 43a34 13 0 1 0-1 0l5-4m-5 4 5 3',
+    swing: 'M50 43Q84 44 84 30Q82 20 67 19',
+    rise: 'M50 43Q88 43 77 18Q68 4 50 7',
+    'arc-return':
+      'M50 43Q84 44 84 30Q82 20 67 19M67 23Q78 24 79 30Q79 39 50 39l5-4m-5 4 5 3',
+    'rise-return': 'M46 43V10l-4 5m4-5 4 5M56 10v33l-4-5m4 5 4-5',
+    'arc-left-return': 'M50 43Q16 44 16 30Q18 20 33 19M33 23Q22 24 21 30Q21 39 50 39l-5-4m5 4-5 3',
+    'wide-return': 'M50 43C5 43 5 17 50 17C90 17 90 39 50 39l5-4m-5 4 5 3',
+    'dip-return': 'M46 16v32l-4-5m4 5 4-5M56 48V16l-4 5m4-5 4 5',
+    'high-arc-return': 'M50 43Q84 30 72 8M72 8Q76 30 50 39l5-5',
+    'low-arc-return': 'M50 24Q16 30 28 49M28 49Q24 30 50 28l-5-4',
+    'sway-return': 'M50 43Q16 43 16 30Q50 8 84 30Q84 43 50 43l5-4m-5 4 5 3',
+    halo: 'M50 43C96 43 91 5 50 5C9 5 4 43 50 43l-5-4m5 4-5 3',
+    'halo-left': 'M50 43C4 43 9 5 50 5C91 5 96 43 50 43l5-4m-5 4 5 3',
+    'arc-left': 'M50 43Q16 44 16 30Q18 20 33 19',
+    'low-angle': 'M50 20Q85 20 78 48l-5-4m5 4 3-5',
+  };
   return (
     <svg className="camera-path" viewBox="0 0 100 56" aria-hidden="true">
       <ellipse cx="50" cy="30" rx="34" ry="13" className="path-guide" />
       <path d="M50 13v25M43 33l7 5 7-5" className="path-axis" />
       <circle cx="50" cy="29" r="4" className="path-subject" />
-      <path
-        className="path-motion"
-        d={
-          kind === "orbit"
-            ? "M50 43a34 13 0 1 1 1 0"
-            : kind === "rise"
-              ? "M50 43Q88 43 77 18Q68 4 50 7"
-              : "M50 43Q84 44 84 30Q82 20 67 19"
-        }
-      />
+      <path className="path-motion" d={paths[kind]} />
       <circle cx="50" cy="43" r="3" className="path-camera" />
     </svg>
   );
