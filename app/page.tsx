@@ -30,6 +30,29 @@ import {
 } from '@/components/ui/dialog';
 import { PRESETS, type PresetId, makeInput, getPreset } from '@/lib/recipe';
 import { extractFrame, makeThumbnails, readVideo } from '@/lib/video';
+import { runCameraBatch, type BatchStatus } from '@/lib/batch';
+
+type ClipResult = {
+  id: string;
+  preset: PresetId;
+  freezeAt: number;
+  resolution: string;
+  speed: number;
+  trimEnd: boolean;
+  status: BatchStatus;
+  cameraUrl?: string;
+  outputUrl?: string;
+  error?: string;
+  progress?: string;
+};
+const resultStatus: Record<BatchStatus, string> = {
+  waiting: 'Waiting',
+  generating: 'Generating',
+  'queued-export': 'Waiting for export',
+  assembling: 'Assembling',
+  ready: 'Ready',
+  error: 'Failed',
+};
 
 const stamp = (t: number) =>
   `${Math.floor(t / 60)
@@ -42,19 +65,22 @@ export default function Home() {
   const [resultTime, setResultTime] = useState(0);
   const [resultDuration, setResultDuration] = useState(0);
   const [muted, setMuted] = useState(false);
-  const objectUrl = useRef(''),
-    resultUrl = useRef('');
+  const objectUrl = useRef('');
+  const resultUrls = useRef(new Set<string>());
+  const operation = useRef<AbortController | null>(null);
   const [file, setFile] = useState<File | null>(null),
     [source, setSource] = useState('');
   const [duration, setDuration] = useState(0),
     [time, setTime] = useState(0),
     [thumbs, setThumbs] = useState<string[]>([]);
-  const [preset, setPreset] = useState<PresetId>('orbit'),
+  const [presets, setPresets] = useState<PresetId[]>(['orbit']),
     [resolution, setResolution] = useState('768P');
   const [cameraSpeed, setCameraSpeed] = useState(1);
-  const [generatedSpeed, setGeneratedSpeed] = useState(1);
   const [trimCameraEnd, setTrimCameraEnd] = useState(false);
-  const [generatedTrimEnd, setGeneratedTrimEnd] = useState(false);
+  const [results, setResults] = useState<ClipResult[]>([]);
+  const [selectedResultId, setSelectedResultId] = useState('');
+  const selectedResult = results.find((item) => item.id === selectedResultId);
+  const exported = selectedResult?.outputUrl || '';
   const [serverKey, setServerKey] = useState(false);
   useEffect(() => {
     void fetch('/api/config')
@@ -80,16 +106,14 @@ export default function Home() {
         ? 'Assembling video…'
         : 'Generating…';
   const [phase, setPhase] = useState(''),
-    [error, setError] = useState(''),
-    [generated, setGenerated] = useState(''),
-    [exported, setExported] = useState('');
-  const [freezeAt, setFreezeAt] = useState(0);
+    [error, setError] = useState('');
   const [view, setView] = useState<'source' | 'result'>('source'),
     [copied, setCopied] = useState(false);
   useEffect(
     () => () => {
       URL.revokeObjectURL(objectUrl.current);
-      URL.revokeObjectURL(resultUrl.current);
+      operation.current?.abort();
+      for (const url of resultUrls.current) URL.revokeObjectURL(url);
     },
     [],
   );
@@ -119,8 +143,10 @@ export default function Home() {
       setDuration(video.duration);
       setTime(video.duration / 2);
       setThumbs(frames);
-      setGenerated('');
-      setExported('');
+      for (const url of resultUrls.current) URL.revokeObjectURL(url);
+      resultUrls.current.clear();
+      setResults([]);
+      setSelectedResultId('');
       setView('source');
       setPlaying(false);
       video.removeAttribute('src');
@@ -145,8 +171,38 @@ export default function Home() {
       setPlaying(false);
     }
   }
+  function updateResult(item: ClipResult, patch: Partial<ClipResult>) {
+    setResults((current) =>
+      current.map((entry) =>
+        entry.id === item.id
+          ? { ...entry, ...(patch.status ? { progress: '' } : {}), ...patch }
+          : entry,
+      ),
+    );
+  }
+  async function assembleResult(
+    item: ClipResult,
+    cameraUrl: string,
+    batchFile: File,
+    signal: AbortSignal,
+  ) {
+    const { assembleEdit } = await import('@/lib/export');
+    const output = await assembleEdit(
+      batchFile,
+      cameraUrl,
+      item.freezeAt,
+      (progress) => updateResult(item, { progress }),
+      item.speed,
+      item.trimEnd,
+    );
+    signal.throwIfAborted();
+    const url = URL.createObjectURL(output);
+    resultUrls.current.add(url);
+    return url;
+  }
   async function generate() {
-    if (!file || !videoRef.current) {
+    if (busy || !presets.length) return;
+    if (!file) {
       inputRef.current?.click();
       return;
     }
@@ -154,104 +210,130 @@ export default function Home() {
       setKeyOpen(true);
       return;
     }
+    const controller = new AbortController();
+    operation.current = controller;
+    const { signal } = controller;
     setActivity('generating');
     setError('');
-    setGenerated('');
-    setExported('');
     setPhase('Capturing this exact moment');
-    videoRef.current.pause();
+    videoRef.current?.pause();
     setPlaying(false);
+    let capture: HTMLVideoElement | undefined;
     try {
-      const frame = await extractFrame(videoRef.current, time),
-        frozenTime = time;
-      setPhase('Sending your frame to H3 Max');
-      const response = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Fal-Key': key },
-        body: JSON.stringify(makeInput(frame, preset, resolution)),
-      });
-      const job = (await response.json()) as {
-        error?: string;
-        request_id: string;
-      };
-      if (!response.ok)
-        throw new Error(job.error || 'Could not start generation.');
-      const started = Date.now();
-      while (Date.now() - started < 600000) {
-        await new Promise((r) => setTimeout(r, 2000));
-        const response = await fetch(
-          `/api/jobs/${encodeURIComponent(job.request_id)}`,
-          { headers: { 'X-Fal-Key': key } },
-        );
-        const state = (await response.json()) as {
-          error?: string;
-          status?: string;
-          video?: { url: string };
-        };
-        if (!response.ok)
-          throw new Error(state.error || 'Could not check generation.');
-        if (state.video?.url) {
-          setGenerated(state.video.url);
-          setGeneratedSpeed(cameraSpeed);
-          setGeneratedTrimEnd(trimCameraEnd);
-          setFreezeAt(frozenTime);
-          setExported('');
-          await exportEdit(state.video.url, frozenTime, cameraSpeed, trimCameraEnd);
-          return;
-        }
-        setPhase(
-          state.status === 'IN_QUEUE'
-            ? 'Queued on fal…'
-            : 'Generating camera move…',
-        );
-      }
-      throw new Error(
-        'This request is taking longer than expected. Check your fal dashboard before retrying.',
-      );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Generation failed.');
-      setPhase('');
-    } finally {
-      setActivity('idle');
-    }
-  }
-  async function exportEdit(
-    cameraUrl = generated,
-    selectedTime = freezeAt,
-    selectedSpeed = generatedSpeed,
-    selectedTrimEnd = generatedTrimEnd,
-  ) {
-    if (!file || !cameraUrl) return;
-    setActivity('assembling');
-    setError('');
-    try {
-      const { assembleEdit } = await import('@/lib/export');
-      const output = await assembleEdit(
-        file,
-        cameraUrl,
-        selectedTime,
-        setPhase,
-        selectedSpeed,
-        selectedTrimEnd,
-      );
-      URL.revokeObjectURL(resultUrl.current);
-      resultUrl.current = URL.createObjectURL(output);
-      setExported(resultUrl.current);
+      // Always capture the original, even while reviewing an earlier finished edit.
+      capture = await readVideo(source);
+      const frozenTime = time;
+      const frame = await extractFrame(capture, frozenTime);
+      signal.throwIfAborted();
+      const jobs: ClipResult[] = presets.map((preset) => ({
+        id: crypto.randomUUID(),
+        preset,
+        freezeAt: frozenTime,
+        resolution,
+        speed: cameraSpeed,
+        trimEnd: trimCameraEnd,
+        status: 'waiting',
+      }));
+      setResults((current) => [...current, ...jobs]);
+      setSelectedResultId(jobs[0].id);
       setView('result');
-      setPhase('Your finished edit is ready.');
-    } catch (e) {
-      setView('source');
-      setError(
-        e instanceof Error
-          ? e.message
-          : 'Export failed. You can still download the camera move.',
+      setPhase(
+        `Generating ${jobs.length} camera ${jobs.length === 1 ? 'move' : 'moves'}. Results appear as they finish.`,
       );
+      await runCameraBatch(jobs, {
+        signal,
+        update: updateResult,
+        generate: async (item) => {
+          const response = await fetch('/api/generate', {
+            method: 'POST',
+            signal,
+            headers: { 'Content-Type': 'application/json', 'X-Fal-Key': key },
+            body: JSON.stringify(
+              makeInput(frame, item.preset, item.resolution),
+            ),
+          });
+          const job = (await response.json()) as {
+            error?: string;
+            request_id?: string;
+          };
+          if (!response.ok || !job.request_id)
+            throw new Error(job.error || 'Could not start generation.');
+          const started = Date.now();
+          while (Date.now() - started < 600000) {
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+            signal.throwIfAborted();
+            const response = await fetch(
+              `/api/jobs/${encodeURIComponent(job.request_id)}`,
+              {
+                headers: { 'X-Fal-Key': key },
+                signal,
+              },
+            );
+            const state = (await response.json()) as {
+              error?: string;
+              status?: string;
+              video?: { url: string };
+            };
+            if (!response.ok)
+              throw new Error(state.error || 'Could not check generation.');
+            if (state.video?.url) return state.video.url;
+            updateResult(item, {
+              progress:
+                state.status === 'IN_QUEUE'
+                  ? 'Queued on fal'
+                  : 'Generating camera move',
+            });
+          }
+          throw new Error(
+            'Generation timed out. Check your fal dashboard before generating again.',
+          );
+        },
+        assemble: (item, cameraUrl) =>
+          assembleResult(item, cameraUrl, file, signal),
+      });
+      setPhase('Batch finished. Choose a result to preview or download.');
+    } catch (e) {
+      if (!signal.aborted)
+        setError(e instanceof Error ? e.message : 'Generation failed.');
+    } finally {
+      if (capture) {
+        capture.removeAttribute('src');
+        capture.load();
+      }
+      if (!signal.aborted) setActivity('idle');
+    }
+  }
+  async function retryExport(item: ClipResult) {
+    if (busy || !file || !item.cameraUrl) return;
+    const controller = new AbortController();
+    operation.current = controller;
+    setActivity('assembling');
+    updateResult(item, { status: 'assembling', error: '' });
+    try {
+      const outputUrl = await assembleResult(
+        item,
+        item.cameraUrl,
+        file,
+        controller.signal,
+      );
+      updateResult(item, { status: 'ready', outputUrl, error: '' });
+    } catch (e) {
+      updateResult(item, {
+        status: 'error',
+        error: e instanceof Error ? e.message : 'Export failed.',
+      });
     } finally {
       setActivity('idle');
     }
   }
-  const hasResult = view === 'result' && exported;
-  const selectedPreset = getPreset(preset);
+  const hasResult = view === 'result' && !!exported;
+  const pendingResult =
+    view === 'result' && !exported ? selectedResult : undefined;
+  const selectedPreset = getPreset(presets[0] || 'orbit');
+  const totalSeconds = presets.reduce(
+    (sum, id) => sum + getPreset(id).duration,
+    0,
+  );
   return (
     <main className={`workspace ${source ? 'has-source' : ''}`}>
       <header className="app-header">
@@ -311,7 +393,17 @@ export default function Home() {
           void upload(e.dataTransfer.files[0]);
         }}
       >
-        {source ? (
+        {pendingResult ? (
+          <output className="result-pending">
+            <CameraPath kind={pendingResult.preset} />
+            <strong>{getPreset(pendingResult.preset).name}</strong>
+            <span>
+              {pendingResult.error ||
+                pendingResult.progress ||
+                resultStatus[pendingResult.status]}
+            </span>
+          </output>
+        ) : source ? (
           <video
             key={hasResult ? exported : source}
             ref={videoRef}
@@ -415,12 +507,10 @@ export default function Home() {
         {source && (
           <div className="stage-label">
             <span className="stage-dot" />
-            {hasResult
-              ? exported
-                ? 'Finished edit'
-                : 'Generated camera move'
+            {view === 'result' && selectedResult
+              ? getPreset(selectedResult.preset).name
               : 'Original'}
-            <span>{hasResult ? '' : stamp(time)}</span>
+            <span>{view === 'result' ? '' : stamp(time)}</span>
           </div>
         )}
         {source && (
@@ -429,9 +519,8 @@ export default function Home() {
               <Upload size={16} />
               Replace
             </button>
-            {exported && (
+            {selectedResult && (
               <button
-                disabled={busy}
                 onClick={() => {
                   setView(view === 'source' ? 'result' : 'source');
                   setPlaying(false);
@@ -445,11 +534,78 @@ export default function Home() {
       </div>
 
       <div className="editing-deck">
+        {results.length > 0 && (
+          <section className="batch-results" aria-label="Generated results">
+            <div className="batch-heading">
+              <strong>
+                Results ·{' '}
+                {results.filter((item) => item.status === 'ready').length}/
+                {results.length} ready
+              </strong>
+              <span>
+                Choose a clip to preview · shared settings within each batch
+              </span>
+            </div>
+            <div className="batch-result-list">
+              {results.map((item, index) => (
+                <button
+                  key={item.id}
+                  className={`batch-result ${item.id === selectedResultId && view === 'result' ? 'active' : ''}`}
+                  aria-pressed={
+                    item.id === selectedResultId && view === 'result'
+                  }
+                  onClick={() => {
+                    setSelectedResultId(item.id);
+                    setView('result');
+                    setPlaying(false);
+                  }}
+                >
+                  <span>
+                    {index + 1}. {getPreset(item.preset).name}
+                  </span>
+                  <small>{resultStatus[item.status]}</small>
+                </button>
+              ))}
+            </div>
+            {selectedResult && (
+              <div className="batch-result-details">
+                <span>
+                  {getPreset(selectedResult.preset).name} · Frame{' '}
+                  {stamp(selectedResult.freezeAt)} · {selectedResult.resolution}{' '}
+                  · {selectedResult.speed}× ·{' '}
+                  {selectedResult.trimEnd ? 'Trim last 1s' : 'Full AI clip'}
+                </span>
+                {selectedResult.status === 'ready' && (
+                  <a
+                    href={exported}
+                    download={`freeze-${selectedResult.preset}-${results.indexOf(selectedResult) + 1}.mp4`}
+                  >
+                    <Download size={15} /> Download MP4
+                  </a>
+                )}
+                {selectedResult.status === 'error' &&
+                  selectedResult.cameraUrl && (
+                    <button
+                      disabled={busy}
+                      onClick={() => void retryExport(selectedResult)}
+                    >
+                      Retry export · no new generation
+                    </button>
+                  )}
+                {selectedResult.error && (
+                  <span className="batch-error" role="alert">
+                    {selectedResult.error}
+                  </span>
+                )}
+              </div>
+            )}
+          </section>
+        )}
         <div className="timeline-row">
           <button
             className="play-control"
             aria-label={playing ? 'Pause' : 'Play'}
-            disabled={!source || !!hasResult || busy}
+            disabled={!source || view === 'result' || busy}
             onClick={() => {
               if (!videoRef.current) return;
               if (playing) videoRef.current.pause();
@@ -492,21 +648,21 @@ export default function Home() {
                 min={0}
                 max={Math.max(0.01, duration - 0.05)}
                 step={0.01}
-                disabled={!source || busy || !!hasResult}
+                disabled={!source || busy || view === 'result'}
               />
             </div>
           </div>
           <div className="frame-step">
             <button
               aria-label="Step back approximately one frame"
-              disabled={!source || busy || !!hasResult}
+              disabled={!source || busy || view === 'result'}
               onClick={() => scrub(Math.max(0, time - 1 / 30))}
             >
               <ChevronLeft size={18} />
             </button>
             <button
               aria-label="Step forward approximately one frame"
-              disabled={!source || busy || !!hasResult}
+              disabled={!source || busy || view === 'result'}
               onClick={() => scrub(Math.min(duration - 0.05, time + 1 / 30))}
             >
               <ChevronRight size={18} />
@@ -516,25 +672,84 @@ export default function Home() {
 
         <div className="control-row">
           <div className="camera-controls">
-            <div className="control-label" id="camera-move-label">Camera move</div>
+            <div className="control-label" id="camera-move-label">
+              Camera move
+            </div>
             <CameraSelect.Root
-              value={preset}
-              onValueChange={(v) => { if (v) setPreset(v); }}
+              multiple
+              value={presets}
+              onValueChange={setPresets}
               disabled={busy}
             >
-              <CameraSelect.Trigger className="camera-select-trigger" aria-label={`Camera move: ${selectedPreset.name}`}>
-                <PresetSummary preset={selectedPreset} />
-                <CameraSelect.Icon><ChevronDown size={18} /></CameraSelect.Icon>
+              <CameraSelect.Trigger
+                className="camera-select-trigger"
+                aria-label={`Camera moves: ${presets.length} selected`}
+              >
+                {presets.length === 1 ? (
+                  <PresetSummary preset={selectedPreset} />
+                ) : (
+                  <span className="preset-copy">
+                    <span className="preset-name">
+                      {presets.length
+                        ? `${presets.length} camera moves selected`
+                        : 'Choose camera moves'}
+                    </span>
+                    <span className="preset-description">
+                      {presets.length
+                        ? `${presets
+                            .slice(0, 2)
+                            .map((id) => getPreset(id).name)
+                            .join(
+                              ', ',
+                            )}${presets.length > 2 ? ` + ${presets.length - 2} more` : ''}`
+                        : 'Select one or more moves for this frame.'}
+                    </span>
+                  </span>
+                )}
+                <CameraSelect.Icon>
+                  <ChevronDown size={18} />
+                </CameraSelect.Icon>
               </CameraSelect.Trigger>
               <CameraSelect.Portal>
-                <CameraSelect.Positioner side="top" align="start" sideOffset={8} alignItemWithTrigger={false} className="camera-select-positioner">
+                <CameraSelect.Positioner
+                  side="top"
+                  align="start"
+                  sideOffset={8}
+                  alignItemWithTrigger={false}
+                  className="camera-select-positioner"
+                >
                   <CameraSelect.Popup className="camera-select-popup">
-                    <div className="camera-select-heading">Camera moves <span>{PRESETS.length} presets</span></div>
-                    <CameraSelect.List className="camera-select-list" aria-label="Camera moves">
+                    <div className="camera-select-heading">
+                      Camera moves <span>{presets.length} selected</span>
+                    </div>
+                    <div className="camera-select-actions">
+                      <button
+                        type="button"
+                        onClick={() => setPresets(PRESETS.map((p) => p.id))}
+                      >
+                        Select all
+                      </button>
+                      <button type="button" onClick={() => setPresets([])}>
+                        Clear
+                      </button>
+                    </div>
+                    <CameraSelect.List
+                      className="camera-select-list"
+                      aria-label="Camera moves"
+                    >
                       {PRESETS.map((p) => (
-                        <CameraSelect.Item key={p.id} value={p.id} label={p.name} className="camera-select-option">
-                          <CameraSelect.ItemText><PresetSummary preset={p} /></CameraSelect.ItemText>
-                          <CameraSelect.ItemIndicator className="camera-select-check"><Check size={17} /></CameraSelect.ItemIndicator>
+                        <CameraSelect.Item
+                          key={p.id}
+                          value={p.id}
+                          label={p.name}
+                          className="camera-select-option"
+                        >
+                          <CameraSelect.ItemText>
+                            <PresetSummary preset={p} />
+                          </CameraSelect.ItemText>
+                          <CameraSelect.ItemIndicator className="camera-select-check">
+                            <Check size={17} />
+                          </CameraSelect.ItemIndicator>
                         </CameraSelect.Item>
                       ))}
                     </CameraSelect.List>
@@ -586,79 +801,38 @@ export default function Home() {
               </NativeSelect>
             </div>
             <span className="render-price">
-              {selectedPreset.duration}s · $
+              {presets.length} {presets.length === 1 ? 'video' : 'videos'} · $
               {(
                 (
                   { '480P': 0.05, '768P': 0.08, '1080P': 0.16 } as Record<
                     string,
                     number
                   >
-                )[resolution] * selectedPreset.duration
+                )[resolution] * totalSeconds
               ).toFixed(2)}
               <small>before launch discount</small>
             </span>
           </div>
           <div className="primary-actions">
-            {generated && !exported ? (
-              <button
-                className="generate-button"
-                disabled={busy}
-                onClick={() => void exportEdit()}
-              >
-                {busy ? busyLabel : 'Retry full video assembly'}
-              </button>
-            ) : !hasResult ? (
-              <button
-                className="generate-button"
-                disabled={busy}
-                onClick={() => void generate()}
-              >
-                {busy ? (
-                  <Loader2 size={18} className="spin" />
-                ) : (
-                  <Pause size={18} />
-                )}
-                <span>
-                  {busy ? busyLabel : source ? 'Generate freeze' : 'Open video'}
-                </span>
-              </button>
-            ) : exported ? (
-              <a
-                className="generate-button"
-                href={exported}
-                download="freeze-edit.mp4"
-              >
-                <Download size={18} />
-                Download MP4
-              </a>
-            ) : (
-              <button
-                className="generate-button"
-                disabled={busy}
-                onClick={() => void exportEdit()}
-              >
-                {busy ? (
-                  <Loader2 size={18} className="spin" />
-                ) : (
-                  <Download size={18} />
-                )}
-                <span>{busy ? busyLabel : 'Retry assembly'}</span>
-              </button>
-            )}
-            <span>
-              {hasResult
-                ? 'Original → generated clip → original'
-                : 'Only the selected frame goes to fal'}
-            </span>
-            {generated && exported && (
-              <button
-                className="quiet-button"
-                disabled={busy}
-                onClick={() => void exportEdit()}
-              >
-                Rebuild full video
-              </button>
-            )}
+            <button
+              className="generate-button"
+              disabled={busy || presets.length === 0}
+              onClick={() => void generate()}
+            >
+              {busy ? (
+                <Loader2 size={18} className="spin" />
+              ) : (
+                <Pause size={18} />
+              )}
+              <span>
+                {busy
+                  ? busyLabel
+                  : !source
+                    ? 'Open video'
+                    : `Generate ${presets.length} ${presets.length === 1 ? 'video' : 'videos'}`}
+              </span>
+            </button>
+            <span>Same frame and settings for every move</span>
           </div>
         </div>
         <div
@@ -749,7 +923,9 @@ export default function Home() {
           </DialogDescription>
           <pre>
             {JSON.stringify(
-              makeInput('YOUR_EXTRACTED_FRAME', preset, resolution),
+              presets.map((id) =>
+                makeInput('YOUR_EXTRACTED_FRAME', id, resolution),
+              ),
               null,
               2,
             )}
@@ -760,7 +936,9 @@ export default function Home() {
               try {
                 await navigator.clipboard.writeText(
                   JSON.stringify(
-                    makeInput('YOUR_EXTRACTED_FRAME', preset, resolution),
+                    presets.map((id) =>
+                      makeInput('YOUR_EXTRACTED_FRAME', id, resolution),
+                    ),
                     null,
                     2,
                   ),
@@ -795,7 +973,9 @@ function PresetSummary({ preset }: { preset: (typeof PRESETS)[number] }) {
       <span className="preset-copy">
         <span className="preset-name">{preset.name}</span>
         <span className="preset-description">{preset.description}</span>
-        <span className="preset-return">{preset.returnsToStart ? 'Returns to start' : 'Ends at new angle'}</span>
+        <span className="preset-return">
+          {preset.returnsToStart ? 'Returns to start' : 'Ends at new angle'}
+        </span>
       </span>
     </span>
   );
@@ -810,7 +990,8 @@ function CameraPath({ kind }: { kind: PresetId }) {
     'arc-return':
       'M50 43Q84 44 84 30Q82 20 67 19M67 23Q78 24 79 30Q79 39 50 39l5-4m-5 4 5 3',
     'rise-return': 'M46 43V10l-4 5m4-5 4 5M56 10v33l-4-5m4 5 4-5',
-    'arc-left-return': 'M50 43Q16 44 16 30Q18 20 33 19M33 23Q22 24 21 30Q21 39 50 39l-5-4m5 4-5 3',
+    'arc-left-return':
+      'M50 43Q16 44 16 30Q18 20 33 19M33 23Q22 24 21 30Q21 39 50 39l-5-4m5 4-5 3',
     'wide-return': 'M50 43C5 43 5 17 50 17C90 17 90 39 50 39l5-4m-5 4 5 3',
     'dip-return': 'M46 16v32l-4-5m4 5 4-5M56 48V16l-4 5m4-5 4 5',
     'high-arc-return': 'M50 43Q84 30 72 8M72 8Q76 30 50 39l5-5',

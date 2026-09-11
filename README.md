@@ -36,10 +36,10 @@ Open the local URL printed in the terminal. Alternatively, leave the key file un
 
 1. Open or drop a video. H.264 MP4 is the most predictable format. Clips can be 1–60 seconds and up to 150 MB.
 2. Scrub to a sharp frame at the moment you want to freeze.
-3. Choose a camera move from the illustrated dropdown, resolution, AI clip speed (1×–2×), and whether to trim the last second of the AI clip. Then select **Generate freeze**.
-4. The app generates the camera move and automatically assembles the complete video. Download the finished MP4.
+3. Choose one or more camera moves from the illustrated dropdown. Quality, AI clip speed (1×–2×), and optional last-second trimming apply to every move in the batch. The price estimate adds up all selected moves.
+4. Select **Generate videos**. Each move uses the same captured frame and produces its own complete edit. Browse the labelled results to preview and download individual MP4s.
 
-**Rebuild full video** reuses the existing generation without another model call. Keep the tab open until you download your result; projects are not saved across refreshes.
+Up to three model requests run concurrently; browser exports run one at a time to limit memory use. Results appear as they finish, and one failure does not stop the others. **Retry export** reuses a completed generation without another model call. New batches keep earlier results until you replace the source video or refresh. Keep the tab open until you download your results; projects are not saved across refreshes.
 
 ## Camera controls
 

@@ -13,7 +13,8 @@
     "format": "oxfmt",
     "postinstall": "node scripts/prepare-ffmpeg.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "npm run test:access && npm run test:camera && node --experimental-strip-types scripts/test-edit.mjs",
+    "test": "npm run test:access && npm run test:batch && npm run test:camera && node --experimental-strip-types scripts/test-edit.mjs",
+    "test:batch": "node --experimental-strip-types scripts/test-batch.mjs",
     "test:access": "node --experimental-strip-types scripts/test-access.mjs",
     "test:camera": "node --experimental-strip-types scripts/test-camera.mjs"
   },
